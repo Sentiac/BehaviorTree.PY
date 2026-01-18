@@ -103,9 +103,6 @@ set(BEHAVIORTREE_PY_PYTHON_INSTALL_DIR "" CACHE STRING
 set(_btpy_python_install_dir "")
 if(BEHAVIORTREE_PY_PYTHON_INSTALL_DIR)
   set(_btpy_python_install_dir "${BEHAVIORTREE_PY_PYTHON_INSTALL_DIR}")
-elseif(DEFINED PYTHON_INSTALL_DIR)
-  # Provided by ament_cmake_python and paired with the generated PYTHONPATH hook.
-  set(_btpy_python_install_dir "${PYTHON_INSTALL_DIR}")
 elseif(DEFINED SKBUILD_PLATLIB_DIR)
   set(_btpy_python_install_dir "${SKBUILD_PLATLIB_DIR}")
 else()
@@ -113,9 +110,16 @@ else()
   set(_btpy_python_install_dir "${CMAKE_INSTALL_LIBDIR}/python3/dist-packages")
 endif()
 
-install(DIRECTORY behaviortree_py
-  DESTINATION "${_btpy_python_install_dir}"
-)
+if(ament_cmake_FOUND)
+  # Installs the pure-Python package and registers the PYTHONPATH environment hook so
+  # that `source install/setup.bash` makes the package importable.
+  ament_python_install_package(behaviortree_py)
+  set(_btpy_python_install_dir "${PYTHON_INSTALL_DIR}")
+else()
+  install(DIRECTORY behaviortree_py
+    DESTINATION "${_btpy_python_install_dir}"
+  )
+endif()
 
 install(TARGETS _core
   LIBRARY DESTINATION "${_btpy_python_install_dir}/behaviortree_py"
