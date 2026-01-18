@@ -2,7 +2,14 @@ import re
 import warnings
 
 from ._version import __version__
-from ._core import BehaviorTreeFactory, NodeStatus, Tree, btcpp_version_number, btcpp_version_string
+from ._core import (
+    Blackboard,
+    BehaviorTreeFactory,
+    NodeStatus,
+    Tree,
+    btcpp_version_number,
+    btcpp_version_string,
+)
 from .nodes import StatefulActionNode, SyncActionNode
 
 
@@ -52,6 +59,7 @@ _check_btcpp_compatibility()
 
 __all__ = [
     "__version__",
+    "Blackboard",
     "BehaviorTreeFactory",
     "NodeStatus",
     "StatefulActionNode",

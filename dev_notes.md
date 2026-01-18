@@ -19,3 +19,8 @@ This file tracks decisions, surprises, and any blocked items encountered while i
 - **Ports spec (decision)**: `@classmethod provided_ports()` must return `{"inputs": list[str], "outputs": list[str]}` (untyped for now; treated as `AnyTypeAllowed`).
 - **Constructor call (decision)**: the factory calls node constructors as `node_type(name, *args, **kwargs)` (name first).
 - **Implementation approach (decision)**: C++ owns the BT node instance; each node holds a strong `py::object` reference to a separate Python object instance and calls `tick()` / `on_start()` / `on_running()` / `on_halted()` with the GIL held.
+
+### Stage 3 ports/blackboard values (initial design)
+- **Typed lane**: `bool`, `int`→`int64`, `float`→`double`, `str`, plus *flat homogeneous* lists of those primitives.
+- **JSON lane**: `dict` / nested lists / mixed containers / `None` → stored as `nlohmann::json` in the blackboard; JSON dict keys must be strings; JSON arrays must be homogeneous (mixed element types raise).
+- **Empty list**: treated as JSON lane (stored as an empty JSON array) since element type cannot be inferred.
