@@ -3,6 +3,7 @@ import warnings
 
 from ._version import __version__
 from ._core import BehaviorTreeFactory, NodeStatus, Tree, btcpp_version_number, btcpp_version_string
+from .nodes import StatefulActionNode, SyncActionNode
 
 
 _VERSION_RE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
@@ -53,6 +54,8 @@ __all__ = [
     "__version__",
     "BehaviorTreeFactory",
     "NodeStatus",
+    "StatefulActionNode",
+    "SyncActionNode",
     "Tree",
     "btcpp_version_number",
     "btcpp_version_string",

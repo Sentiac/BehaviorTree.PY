@@ -14,3 +14,8 @@ This file tracks decisions, surprises, and any blocked items encountered while i
 ### Stage 1 bindings (C++ nodes only)
 - **Decision**: Bind `BehaviorTreeFactory`, `Tree`, and `NodeStatus` directly against upstream BehaviorTree.CPP public APIs.
 - **GIL policy (initial)**: release the GIL for `Tree.tick_*` and `halt_tree` calls since Stage 1 has no Python callbacks.
+
+### Stage 2 Python nodes (initial design)
+- **Ports spec (decision)**: `@classmethod provided_ports()` must return `{"inputs": list[str], "outputs": list[str]}` (untyped for now; treated as `AnyTypeAllowed`).
+- **Constructor call (decision)**: the factory calls node constructors as `node_type(name, *args, **kwargs)` (name first).
+- **Implementation approach (decision)**: C++ owns the BT node instance; each node holds a strong `py::object` reference to a separate Python object instance and calls `tick()` / `on_start()` / `on_running()` / `on_halted()` with the GIL held.
