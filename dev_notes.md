@@ -28,3 +28,6 @@ This file tracks decisions, surprises, and any blocked items encountered while i
 ### Stage 5 JSON export/import
 - **Decision**: `Tree.to_json()/from_json()` and `Blackboard.to_json()/from_json()` use BehaviorTree.PY’s own value conversion rules so they round-trip JSON-lane values cleanly.
 - **Note**: `Tree.to_bt_json()/from_bt_json()` and `Blackboard.to_bt_json()/from_bt_json()` expose BT.CPP’s `Export*ToJSON` / `Import*FromJSON` behavior, which is limited by BT.CPP `JsonExporter` support (may omit/skip unsupported types).
+
+### Stage 4 plugins (test strategy)
+- **Decision**: Add a pytest integration test that compiles a tiny BT.CPP plugin (`BT_REGISTER_NODES`) into a temp dir and loads it via `BehaviorTreeFactory.register_from_plugin()`.
