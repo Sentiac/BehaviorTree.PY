@@ -11,3 +11,6 @@ This file tracks decisions, surprises, and any blocked items encountered while i
   - register the standard `PYTHONPATH` environment hook so the overlay makes the package importable.
   - Keep non-ament builds (pip/scikit-build) using the normal CMake install path (`SKBUILD_PLATLIB_DIR` when set).
 
+### Stage 1 bindings (C++ nodes only)
+- **Decision**: Bind `BehaviorTreeFactory`, `Tree`, and `NodeStatus` directly against upstream BehaviorTree.CPP public APIs.
+- **GIL policy (initial)**: release the GIL for `Tree.tick_*` and `halt_tree` calls since Stage 1 has no Python callbacks.

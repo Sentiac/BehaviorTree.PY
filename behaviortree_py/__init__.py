@@ -2,7 +2,7 @@ import re
 import warnings
 
 from ._version import __version__
-from ._core import btcpp_version_number, btcpp_version_string
+from ._core import BehaviorTreeFactory, NodeStatus, Tree, btcpp_version_number, btcpp_version_string
 
 
 _VERSION_RE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
@@ -51,6 +51,9 @@ _check_btcpp_compatibility()
 
 __all__ = [
     "__version__",
+    "BehaviorTreeFactory",
+    "NodeStatus",
+    "Tree",
     "btcpp_version_number",
     "btcpp_version_string",
 ]
