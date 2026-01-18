@@ -24,3 +24,7 @@ This file tracks decisions, surprises, and any blocked items encountered while i
 - **Typed lane**: `bool`, `int`→`int64`, `float`→`double`, `str`, plus *flat homogeneous* lists of those primitives.
 - **JSON lane**: `dict` / nested lists / mixed containers / `None` → stored as `nlohmann::json` in the blackboard; JSON dict keys must be strings; JSON arrays must be homogeneous (mixed element types raise).
 - **Empty list**: treated as JSON lane (stored as an empty JSON array) since element type cannot be inferred.
+
+### Stage 5 JSON export/import
+- **Decision**: `Tree.to_json()/from_json()` and `Blackboard.to_json()/from_json()` use BehaviorTree.PY’s own value conversion rules so they round-trip JSON-lane values cleanly.
+- **Note**: `Tree.to_bt_json()/from_bt_json()` and `Blackboard.to_bt_json()/from_bt_json()` expose BT.CPP’s `Export*ToJSON` / `Import*FromJSON` behavior, which is limited by BT.CPP `JsonExporter` support (may omit/skip unsupported types).

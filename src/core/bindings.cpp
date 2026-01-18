@@ -497,6 +497,46 @@ void blackboard_set_from_py(BT::Blackboard& bb, const std::string& key, const py
   throw py::type_error("Unsupported value type for Blackboard.set()");
 }
 
+py::dict blackboard_to_py_dict(const BT::Blackboard& bb)
+{
+  py::dict out;
+  for (const auto& key_sv : bb.getKeys())
+  {
+    std::string key(key_sv);
+    if (auto any_ref = bb.getAnyLocked(key))
+    {
+      if (auto any_ptr = any_ref.get())
+      {
+        if (!any_ptr->empty())
+        {
+          out[py::str(key)] = any_to_py(*any_ptr);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+void blackboard_from_py_dict(BT::Blackboard& bb, const py::handle& obj)
+{
+  if (!py::isinstance<py::dict>(obj))
+  {
+    throw py::type_error("Expected a dict for blackboard import");
+  }
+
+  const py::dict dict = py::reinterpret_borrow<py::dict>(obj);
+  for (auto item : dict)
+  {
+    const py::handle key_obj = item.first;
+    if (!py::isinstance<py::str>(key_obj))
+    {
+      throw py::type_error("Blackboard import dict keys must be strings");
+    }
+    const auto key = py::cast<std::string>(key_obj);
+    blackboard_set_from_py(bb, key, item.second);
+  }
+}
+
 class NodeHandle
 {
 public:
@@ -723,7 +763,27 @@ PYBIND11_MODULE(_core, m)
           py::arg("key"),
           py::arg("value"),
           "Set a value in the blackboard using BehaviorTree.PY conversion rules.")
-      .def("unset", &BT::Blackboard::unset, py::arg("key"), "Unset a blackboard key.");
+      .def("unset", &BT::Blackboard::unset, py::arg("key"), "Unset a blackboard key.")
+      .def(
+          "to_json",
+          [](const BT::Blackboard& bb) { return blackboard_to_py_dict(bb); },
+          "Export the blackboard to a JSON-compatible Python object.")
+      .def(
+          "from_json",
+          [](BT::Blackboard& bb, const py::object& obj) { blackboard_from_py_dict(bb, obj); },
+          py::arg("obj"),
+          "Import values into the blackboard from a JSON-compatible Python object.")
+      .def(
+          "to_bt_json",
+          [](const BT::Blackboard& bb) { return json_to_py(BT::ExportBlackboardToJSON(bb)); },
+          "Export using BT.CPP JsonExporter (may omit unsupported types).")
+      .def(
+          "from_bt_json",
+          [](BT::Blackboard& bb, const py::object& obj) {
+            BT::ImportBlackboardFromJSON(py_to_json_strict(obj), bb);
+          },
+          py::arg("obj"),
+          "Import using BT.CPP JsonExporter (requires BT.CPP-supported JSON formats).");
 
   py::class_<BT::Tree>(m, "Tree")
       .def(
@@ -750,6 +810,54 @@ PYBIND11_MODULE(_core, m)
           "Tick until completion, sleeping between ticks.")
       .def("root_blackboard", [](BT::Tree& tree) { return tree.rootBlackboard(); },
            "Return the root blackboard.")
+      .def("to_json",
+           [](const BT::Tree& tree) {
+             py::dict out;
+             for (const auto& subtree : tree.subtrees)
+             {
+               auto name = subtree->instance_name;
+               if (name.empty())
+               {
+                 name = subtree->tree_ID;
+               }
+               out[py::str(name)] = blackboard_to_py_dict(*subtree->blackboard);
+             }
+             return out;
+           },
+           "Export the tree blackboards to a JSON-compatible Python object.")
+      .def("from_json",
+           [](BT::Tree& tree, const py::object& obj) {
+             if (!py::isinstance<py::dict>(obj))
+             {
+               throw py::type_error("Expected a dict for tree import");
+             }
+             const py::dict dict = py::reinterpret_borrow<py::dict>(obj);
+             for (const auto& subtree : tree.subtrees)
+             {
+               auto name = subtree->instance_name;
+               if (name.empty())
+               {
+                 name = subtree->tree_ID;
+               }
+               const py::handle key = py::str(name);
+               if (!dict.contains(key))
+               {
+                 throw py::key_error("Missing subtree blackboard in import data: " + name);
+               }
+               blackboard_from_py_dict(*subtree->blackboard, dict[key]);
+             }
+           },
+           py::arg("obj"),
+           "Import values into all tree blackboards from a JSON-compatible Python object.")
+      .def("to_bt_json",
+           [](const BT::Tree& tree) { return json_to_py(BT::ExportTreeToJSON(tree)); },
+           "Export using BT.CPP JsonExporter (may omit unsupported types).")
+      .def("from_bt_json",
+           [](BT::Tree& tree, const py::object& obj) {
+             BT::ImportTreeFromJSON(py_to_json_strict(obj), tree);
+           },
+           py::arg("obj"),
+           "Import using BT.CPP JsonExporter (requires BT.CPP-supported JSON formats).")
       .def(
           "halt_tree",
           [](BT::Tree& tree) {
