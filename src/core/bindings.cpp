@@ -1,5 +1,7 @@
 #include <chrono>
+#include <cctype>
 #include <cstdint>
+#include <algorithm>
 #include <limits>
 #include <string>
 #include <thread>
@@ -45,7 +47,7 @@ BT::PortsList extract_ports_list_or_throw(const py::type& type)
 
   const py::dict port_spec = port_spec_obj.cast<py::dict>();
 
-  auto get_str_list = [&](const char* key) -> py::list {
+  auto get_list = [&](const char* key) -> py::list {
     if (!port_spec.contains(key))
     {
       return py::list();
@@ -64,23 +66,126 @@ BT::PortsList extract_ports_list_or_throw(const py::type& type)
 
   BT::PortsList ports;
 
-  for (py::handle name_obj : get_str_list("inputs"))
-  {
-    const auto name = py::cast<std::string>(name_obj);
-    ports.insert(BT::InputPort<BT::AnyTypeAllowed>(name));
-  }
+  auto normalize_type = [](std::string type_str) -> std::string {
+    std::string out;
+    out.reserve(type_str.size());
+    for (unsigned char c : type_str)
+    {
+      if (std::isspace(c))
+      {
+        continue;
+      }
+      out.push_back(static_cast<char>(std::tolower(c)));
+    }
+    return out;
+  };
 
-  for (py::handle name_obj : get_str_list("outputs"))
-  {
-    const auto name = py::cast<std::string>(name_obj);
-    ports.insert(BT::OutputPort<BT::AnyTypeAllowed>(name));
-  }
+  auto insert_port = [&](BT::PortDirection direction, const std::string& name,
+                         const std::string& type_str) {
+    const std::string t = normalize_type(type_str);
+    if (t.empty() || t == "any")
+    {
+      ports.insert(BT::CreatePort<BT::AnyTypeAllowed>(direction, name));
+      return;
+    }
+    if (t == "bool")
+    {
+      ports.insert(BT::CreatePort<bool>(direction, name));
+      return;
+    }
+    if (t == "int" || t == "int64")
+    {
+      ports.insert(BT::CreatePort<int64_t>(direction, name));
+      return;
+    }
+    if (t == "float" || t == "double")
+    {
+      ports.insert(BT::CreatePort<double>(direction, name));
+      return;
+    }
+    if (t == "str" || t == "string")
+    {
+      ports.insert(BT::CreatePort<std::string>(direction, name));
+      return;
+    }
+    if (t == "list[bool]")
+    {
+      ports.insert(BT::CreatePort<std::vector<bool>>(direction, name));
+      return;
+    }
+    if (t == "list[int]" || t == "list[int64]")
+    {
+      ports.insert(BT::CreatePort<std::vector<int64_t>>(direction, name));
+      return;
+    }
+    if (t == "list[float]" || t == "list[double]")
+    {
+      ports.insert(BT::CreatePort<std::vector<double>>(direction, name));
+      return;
+    }
+    if (t == "list[str]" || t == "list[string]")
+    {
+      ports.insert(BT::CreatePort<std::vector<std::string>>(direction, name));
+      return;
+    }
+    if (t == "json")
+    {
+      ports.insert(BT::CreatePort<nlohmann::json>(direction, name));
+      return;
+    }
 
-  for (py::handle name_obj : get_str_list("inouts"))
-  {
-    const auto name = py::cast<std::string>(name_obj);
-    ports.insert(BT::BidirectionalPort<BT::AnyTypeAllowed>(name));
-  }
+    throw py::value_error("Unsupported port type: '" + type_str
+                          + "' (supported: any, bool, int, float, str, json, list[...])");
+  };
+
+  auto add_ports = [&](BT::PortDirection direction, const char* key) {
+    for (py::handle item : get_list(key))
+    {
+      if (py::isinstance<py::str>(item))
+      {
+        insert_port(direction, py::cast<std::string>(item), "");
+        continue;
+      }
+      if (py::isinstance<py::dict>(item))
+      {
+        const py::dict spec = py::reinterpret_borrow<py::dict>(item);
+        if (!spec.contains("name"))
+        {
+          throw py::type_error(std::string("Port spec dict in provided_ports()['") + key
+                               + "'] must contain key 'name'");
+        }
+        const py::handle name_obj = spec["name"];
+        if (!py::isinstance<py::str>(name_obj))
+        {
+          throw py::type_error(std::string("Port spec 'name' in provided_ports()['") + key
+                               + "'] must be a string");
+        }
+        const std::string name = py::cast<std::string>(name_obj);
+
+        std::string type_str;
+        if (spec.contains("type") && !spec["type"].is_none())
+        {
+          const py::handle type_obj = spec["type"];
+          if (!py::isinstance<py::str>(type_obj))
+          {
+            throw py::type_error(std::string("Port spec 'type' in provided_ports()['") + key
+                                 + "'] must be a string");
+          }
+          type_str = py::cast<std::string>(type_obj);
+        }
+
+        insert_port(direction, name, type_str);
+        continue;
+      }
+
+      throw py::type_error(std::string("Port specs in provided_ports()['") + key
+                           + "'] must be strings or dicts");
+    }
+  };
+
+  add_ports(BT::PortDirection::INPUT, "inputs");
+  add_ports(BT::PortDirection::OUTPUT, "outputs");
+  add_ports(BT::PortDirection::INOUT, "inouts");
 
   return ports;
 }
@@ -338,6 +443,200 @@ py::object any_to_py(const BT::Any& any)
 BT::Result set_output_from_py(BT::TreeNode& node, const std::string& key,
                               const py::handle& value)
 {
+  const BT::PortInfo* port_info = nullptr;
+  if (const auto* manifest = static_cast<const BT::TreeNode&>(node).config().manifest)
+  {
+    auto it = manifest->ports.find(key);
+    if (it != manifest->ports.end())
+    {
+      port_info = &it->second;
+    }
+  }
+
+  if (port_info && port_info->isStronglyTyped())
+  {
+    const std::type_index& expected_type = port_info->type();
+    const std::string expected_name = port_info->typeName();
+
+    auto fail = [&](const std::string& msg) -> void {
+      throw py::type_error("Port '" + key + "' expects " + expected_name + ": " + msg);
+    };
+
+    auto json_lane_reason = [&](const py::handle& obj) -> std::string {
+      if (obj.is_none())
+      {
+        return "None -> JSON null";
+      }
+      if (py::isinstance<py::dict>(obj))
+      {
+        return "dict -> JSON object";
+      }
+      if (py::isinstance<py::list>(obj) || py::isinstance<py::tuple>(obj))
+      {
+        const py::sequence seq = py::reinterpret_borrow<py::sequence>(obj);
+        const auto n = py::len(seq);
+        if (n == 0)
+        {
+          return "empty list -> JSON array (element type unknown)";
+        }
+        const py::handle first = seq[0];
+        if (py::isinstance<py::list>(first) || py::isinstance<py::tuple>(first))
+        {
+          return "nested list -> JSON array";
+        }
+        if (py::isinstance<py::dict>(first))
+        {
+          return "list of dict -> JSON array";
+        }
+      }
+      return "value treated as JSON lane";
+    };
+
+    if (expected_type == typeid(nlohmann::json))
+    {
+      return node.setOutput(key, py_to_json_strict(value));
+    }
+
+    if (value.is_none())
+    {
+      fail(std::string("None is only allowed for JSON ports (") + json_lane_reason(value) + ")");
+    }
+    if (py::isinstance<py::dict>(value))
+    {
+      fail(std::string("dict is only allowed for JSON ports (") + json_lane_reason(value) + ")");
+    }
+
+    if (expected_type == typeid(bool))
+    {
+      if (!py::isinstance<py::bool_>(value))
+      {
+        fail("got " + py_type_name(value));
+      }
+      return node.setOutput(key, py::cast<bool>(value));
+    }
+
+    if (expected_type == typeid(int64_t))
+    {
+      if (!py::isinstance<py::int_>(value) || py::isinstance<py::bool_>(value))
+      {
+        fail("got " + py_type_name(value));
+      }
+      return node.setOutput(key, py_int_to_int64(value));
+    }
+
+    if (expected_type == typeid(double))
+    {
+      if (!py::isinstance<py::float_>(value))
+      {
+        fail("got " + py_type_name(value));
+      }
+      return node.setOutput(key, py::cast<double>(value));
+    }
+
+    if (expected_type == typeid(std::string))
+    {
+      if (!py::isinstance<py::str>(value))
+      {
+        fail("got " + py_type_name(value));
+      }
+      return node.setOutput(key, py::cast<std::string>(value));
+    }
+
+    if (expected_type == typeid(std::vector<bool>))
+    {
+      if (!py::isinstance<py::list>(value) && !py::isinstance<py::tuple>(value))
+      {
+        fail("got " + py_type_name(value));
+      }
+      const py::sequence seq = py::reinterpret_borrow<py::sequence>(value);
+      const auto n = py::len(seq);
+      std::vector<bool> out;
+      out.reserve(n);
+      size_t index = 0;
+      for (py::handle item : seq)
+      {
+        if (!py::isinstance<py::bool_>(item))
+        {
+          fail(std::string("element ") + std::to_string(index) + " is " + py_type_name(item));
+        }
+        out.push_back(py::cast<bool>(item));
+        ++index;
+      }
+      return node.setOutput(key, out);
+    }
+
+    if (expected_type == typeid(std::vector<int64_t>))
+    {
+      if (!py::isinstance<py::list>(value) && !py::isinstance<py::tuple>(value))
+      {
+        fail("got " + py_type_name(value));
+      }
+      const py::sequence seq = py::reinterpret_borrow<py::sequence>(value);
+      const auto n = py::len(seq);
+      std::vector<int64_t> out;
+      out.reserve(n);
+      size_t index = 0;
+      for (py::handle item : seq)
+      {
+        if (!py::isinstance<py::int_>(item) || py::isinstance<py::bool_>(item))
+        {
+          fail(std::string("element ") + std::to_string(index) + " is " + py_type_name(item));
+        }
+        out.push_back(py_int_to_int64(item));
+        ++index;
+      }
+      return node.setOutput(key, out);
+    }
+
+    if (expected_type == typeid(std::vector<double>))
+    {
+      if (!py::isinstance<py::list>(value) && !py::isinstance<py::tuple>(value))
+      {
+        fail("got " + py_type_name(value));
+      }
+      const py::sequence seq = py::reinterpret_borrow<py::sequence>(value);
+      const auto n = py::len(seq);
+      std::vector<double> out;
+      out.reserve(n);
+      size_t index = 0;
+      for (py::handle item : seq)
+      {
+        if (!py::isinstance<py::float_>(item))
+        {
+          fail(std::string("element ") + std::to_string(index) + " is " + py_type_name(item));
+        }
+        out.push_back(py::cast<double>(item));
+        ++index;
+      }
+      return node.setOutput(key, out);
+    }
+
+    if (expected_type == typeid(std::vector<std::string>))
+    {
+      if (!py::isinstance<py::list>(value) && !py::isinstance<py::tuple>(value))
+      {
+        fail("got " + py_type_name(value));
+      }
+      const py::sequence seq = py::reinterpret_borrow<py::sequence>(value);
+      const auto n = py::len(seq);
+      std::vector<std::string> out;
+      out.reserve(n);
+      size_t index = 0;
+      for (py::handle item : seq)
+      {
+        if (!py::isinstance<py::str>(item))
+        {
+          fail(std::string("element ") + std::to_string(index) + " is " + py_type_name(item));
+        }
+        out.push_back(py::cast<std::string>(item));
+        ++index;
+      }
+      return node.setOutput(key, out);
+    }
+
+    fail("unsupported strongly-typed port type");
+  }
+
   if (value.is_none())
   {
     return node.setOutput(key, nlohmann::json(nullptr));
@@ -653,13 +952,115 @@ public:
 
   [[nodiscard]] py::object get_input(const std::string& key) const
   {
+    const BT::PortInfo* port_info = nullptr;
+    const BT::TreeNode& node_ref = *node_;
+    if (const auto* manifest = node_ref.config().manifest)
+    {
+      auto it = manifest->ports.find(key);
+      if (it != manifest->ports.end())
+      {
+        port_info = &it->second;
+      }
+    }
+
+    auto throw_input_error = [&](const std::string& err) -> void {
+      throw std::runtime_error(
+          "get_input('" + key + "') failed for node '" + node_->fullPath()
+          + "' (registration_id='" + node_->registrationName() + "'): " + err);
+    };
+
+    if (port_info && port_info->isStronglyTyped())
+    {
+      const std::type_index& expected = port_info->type();
+
+      if (expected == typeid(bool))
+      {
+        auto res = node_->getInput<bool>(key);
+        if (!res)
+        {
+          throw_input_error(res.error());
+        }
+        return any_to_py(BT::Any(res.value()));
+      }
+      if (expected == typeid(int64_t))
+      {
+        auto res = node_->getInput<int64_t>(key);
+        if (!res)
+        {
+          throw_input_error(res.error());
+        }
+        return any_to_py(BT::Any(res.value()));
+      }
+      if (expected == typeid(double))
+      {
+        auto res = node_->getInput<double>(key);
+        if (!res)
+        {
+          throw_input_error(res.error());
+        }
+        return any_to_py(BT::Any(res.value()));
+      }
+      if (expected == typeid(std::string))
+      {
+        auto res = node_->getInput<std::string>(key);
+        if (!res)
+        {
+          throw_input_error(res.error());
+        }
+        return any_to_py(BT::Any(res.value()));
+      }
+      if (expected == typeid(std::vector<bool>))
+      {
+        auto res = node_->getInput<std::vector<bool>>(key);
+        if (!res)
+        {
+          throw_input_error(res.error());
+        }
+        return any_to_py(BT::Any(res.value()));
+      }
+      if (expected == typeid(std::vector<int64_t>))
+      {
+        auto res = node_->getInput<std::vector<int64_t>>(key);
+        if (!res)
+        {
+          throw_input_error(res.error());
+        }
+        return any_to_py(BT::Any(res.value()));
+      }
+      if (expected == typeid(std::vector<double>))
+      {
+        auto res = node_->getInput<std::vector<double>>(key);
+        if (!res)
+        {
+          throw_input_error(res.error());
+        }
+        return any_to_py(BT::Any(res.value()));
+      }
+      if (expected == typeid(std::vector<std::string>))
+      {
+        auto res = node_->getInput<std::vector<std::string>>(key);
+        if (!res)
+        {
+          throw_input_error(res.error());
+        }
+        return any_to_py(BT::Any(res.value()));
+      }
+      if (expected == typeid(nlohmann::json))
+      {
+        auto res = node_->getInput<nlohmann::json>(key);
+        if (!res)
+        {
+          throw_input_error(res.error());
+        }
+        return any_to_py(BT::Any(res.value()));
+      }
+    }
+
     BT::Any out;
     auto res = node_->getInput(key, out);
     if (!res)
     {
-      throw std::runtime_error(
-          "get_input('" + key + "') failed for node '" + node_->fullPath()
-          + "' (registration_id='" + node_->registrationName() + "'): " + res.error());
+      throw_input_error(res.error());
     }
     return any_to_py(out);
   }
@@ -1629,9 +2030,11 @@ PYBIND11_MODULE(_core, m)
           py::arg("node_type"),
           "Register a Python SyncActionNode type.\n\n"
           "The node class must define @classmethod provided_ports() -> dict with keys:\n"
-          "  - 'inputs': list[str]\n"
-          "  - 'outputs': list[str]\n"
-          "  - 'inouts': list[str] (optional)\n"
+          "  - 'inputs': list[str|dict]\n"
+          "  - 'outputs': list[str|dict]\n"
+          "  - 'inouts': list[str|dict] (optional)\n"
+          "Port entries may be either a string name or a dict {'name': str, 'type': str}.\n"
+          "Supported 'type' strings: any, bool, int, float, str, json, list[bool|int|float|str].\n"
           "The constructor is called as: node_type(name, *args, **kwargs).")
       .def(
           "register_stateful_action",
@@ -1650,9 +2053,11 @@ PYBIND11_MODULE(_core, m)
           py::arg("node_type"),
           "Register a Python StatefulActionNode type.\n\n"
           "The node class must define @classmethod provided_ports() -> dict with keys:\n"
-          "  - 'inputs': list[str]\n"
-          "  - 'outputs': list[str]\n"
-          "  - 'inouts': list[str] (optional)\n"
+          "  - 'inputs': list[str|dict]\n"
+          "  - 'outputs': list[str|dict]\n"
+          "  - 'inouts': list[str|dict] (optional)\n"
+          "Port entries may be either a string name or a dict {'name': str, 'type': str}.\n"
+          "Supported 'type' strings: any, bool, int, float, str, json, list[bool|int|float|str].\n"
           "The constructor is called as: node_type(name, *args, **kwargs).")
       .def(
           "register_condition",
@@ -1671,9 +2076,11 @@ PYBIND11_MODULE(_core, m)
           py::arg("node_type"),
           "Register a Python ConditionNode type.\n\n"
           "The node class must define @classmethod provided_ports() -> dict with keys:\n"
-          "  - 'inputs': list[str]\n"
-          "  - 'outputs': list[str]\n"
-          "  - 'inouts': list[str] (optional)\n"
+          "  - 'inputs': list[str|dict]\n"
+          "  - 'outputs': list[str|dict]\n"
+          "  - 'inouts': list[str|dict] (optional)\n"
+          "Port entries may be either a string name or a dict {'name': str, 'type': str}.\n"
+          "Supported 'type' strings: any, bool, int, float, str, json, list[bool|int|float|str].\n"
           "The constructor is called as: node_type(name, *args, **kwargs).")
       .def(
           "register_decorator",
@@ -1692,9 +2099,11 @@ PYBIND11_MODULE(_core, m)
           py::arg("node_type"),
           "Register a Python DecoratorNode type.\n\n"
           "The node class must define @classmethod provided_ports() -> dict with keys:\n"
-          "  - 'inputs': list[str]\n"
-          "  - 'outputs': list[str]\n"
-          "  - 'inouts': list[str] (optional)\n"
+          "  - 'inputs': list[str|dict]\n"
+          "  - 'outputs': list[str|dict]\n"
+          "  - 'inouts': list[str|dict] (optional)\n"
+          "Port entries may be either a string name or a dict {'name': str, 'type': str}.\n"
+          "Supported 'type' strings: any, bool, int, float, str, json, list[bool|int|float|str].\n"
           "The constructor is called as: node_type(name, *args, **kwargs).")
       .def(
           "register_control",
@@ -1713,9 +2122,11 @@ PYBIND11_MODULE(_core, m)
           py::arg("node_type"),
           "Register a Python ControlNode type.\n\n"
           "The node class must define @classmethod provided_ports() -> dict with keys:\n"
-          "  - 'inputs': list[str]\n"
-          "  - 'outputs': list[str]\n"
-          "  - 'inouts': list[str] (optional)\n"
+          "  - 'inputs': list[str|dict]\n"
+          "  - 'outputs': list[str|dict]\n"
+          "  - 'inouts': list[str|dict] (optional)\n"
+          "Port entries may be either a string name or a dict {'name': str, 'type': str}.\n"
+          "Supported 'type' strings: any, bool, int, float, str, json, list[bool|int|float|str].\n"
           "The constructor is called as: node_type(name, *args, **kwargs).")
       .def(
           "register_from_plugin",

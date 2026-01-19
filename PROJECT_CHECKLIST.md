@@ -151,7 +151,7 @@ Implement the agreed type/JSON rules without extending BT.CPP.
 - [x] Bind minimal blackboard APIs needed for examples (set/get, introspection as needed).
 - [ ] Extend the port spec beyond “AnyTypeAllowed”:
   - [x] Support INOUT ports.
-  - [ ] Support typed ports (PortInfo/TypeInfo) and enforce the typed/JSON contract against port types.
+  - [x] Support typed ports (PortInfo/TypeInfo) and enforce the typed/JSON contract against port types.
   - [x] Expose `PortDirection`, `PortInfo`, and `TypeInfo` in Python for introspection/debugging.
 
 ### Stage 4 — Plugins + real-world trees

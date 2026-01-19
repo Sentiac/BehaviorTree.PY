@@ -100,7 +100,7 @@ Current status:
   - [ ] (Optional) also expose the struct as a real Python class via a pybind11 type plugin.
 - [ ] `None` handling (decision):
   - [x] `None` allowed only in JSON lane and maps to JSON `null`. (covered by `../tests/test_stage3_ports_and_blackboard.py`)
-  - [ ] `None` rejected for typed ports/values, with clear error messages. (blocked until typed ports exist)
+  - [x] `None` rejected for typed ports/values, with clear error messages.
 - [ ] Failure examples: demonstrate and explain conversion errors.
 
 ## Custom C++ struct interop examples (key deliverable)

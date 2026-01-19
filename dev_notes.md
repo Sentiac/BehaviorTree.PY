@@ -81,3 +81,10 @@ This file tracks decisions, surprises, and any blocked items encountered while i
   - typed list validation errors include the failing element index and Python type,
   - JSON array homogeneity errors include index + expected/actual JSON type,
   - `get_input(...)` / `set_output(...)` errors include node `fullPath()` and `registration_id`.
+
+### Typed ports (Python `provided_ports()`)
+- **Added**: `provided_ports()` entries may be either strings (untyped `AnyTypeAllowed`) or dicts like `{"name": "x", "type": "int"}`.
+- **Supported `type` strings**: `any`, `bool`, `int`, `float`, `str`, `json`, `list[bool]`, `list[int]`, `list[float]`, `list[str]`.
+- **Enforcement**:
+  - `set_output()` rejects JSON-lane values (`dict`, `None`) for non-JSON typed ports.
+  - `get_input()` uses BT.CPP `getInput<T>` for strongly-typed ports (including conversion from string when available).
