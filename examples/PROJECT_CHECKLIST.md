@@ -50,7 +50,7 @@ Current status:
   - [ ] (Deferred) multi-thread ticking support as an optional feature, with dedicated stress tests.
 - [ ] Lifetime/ownership:
   - [ ] Confirm Python node instances remain alive while the tree exists (strong refs held by wrappers).
-  - [ ] Confirm teardown releases Python references deterministically (no leaks in repeated create/destroy cycles).
+  - [x] Confirm teardown releases Python references deterministically (no leaks in repeated create/destroy cycles). (covered by `../tests/test_stage7_stress.py`)
 - [ ] Error propagation:
   - [x] Python exceptions inside node overrides abort ticking and propagate to caller (BT.CPP-aligned).
   - [x] Exception messages include node path/name and the phase where it occurred.
@@ -86,9 +86,9 @@ Current status:
   - [x] `stage4_plugin_loading.py` (builds a small plugin at runtime via CMake).
   - [x] `stage5_json_roundtrip.py` (tree + blackboard export/import).
   - [x] `stage5_introspection.py` (TreeNode wrappers).
-  - [ ] `stage6_loggers.py` (StdCoutLogger/FileLogger2/MinitraceLogger).
-  - [ ] `stage3_typed_ports.py` (typed `provided_ports()` dict specs + enforcement).
-  - [ ] `stage2_control_decorator_nodes.py` (Python ControlNode/DecoratorNode patterns).
+  - [x] `stage6_loggers.py` (StdCoutLogger/FileLogger2/MinitraceLogger).
+  - [x] `stage3_typed_ports.py` (typed `provided_ports()` dict specs + enforcement).
+  - [x] `stage2_control_decorator_nodes.py` (Python ControlNode/DecoratorNode patterns).
 
 ## Data interchange examples
 - [x] Primitive ports: bool/int/double/string. (covered by `../tests/test_stage3_ports_and_blackboard.py`)

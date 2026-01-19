@@ -9,7 +9,7 @@ Non-goals:
 ## Repo structure (planned)
 - [ ] Provide a Python-first entrypoint:
   - [x] Create `pyproject.toml` using a modern CMake/wheel backend (e.g. `scikit-build-core`).
-  - [ ] Ensure `pip install .` is the primary developer/user workflow (validate in a clean environment + document it).
+  - [x] Ensure `pip install .` is the primary developer/user workflow (validate in a clean environment + document it).
 - [x] Maintain a clean CMake core underneath (ROS-agnostic):
   - [x] Add `CMakeLists.txt` that builds only the pybind11 module(s) and links against `behaviortree_cpp::behaviortree_cpp`.
   - [x] Keep CMake install targets usable by CMake/ament consumers (ament Python install hook + overlay import works).
@@ -100,7 +100,7 @@ Each stage should be completed with:
 
 ### Stage 0 — Build + discovery baseline (no BT features yet)
 - [x] Canonical CMake project builds `behaviortree_py._core` and installs `behaviortree_py`.
-- [ ] `pyproject.toml` drives the CMake build (`pip install .`) (validate this path end-to-end).
+- [x] `pyproject.toml` drives the CMake build (`pip install .`) (validated end-to-end via `scripts/pip_install_smoke.sh`).
 - [x] `find_package(behaviortree_cpp CONFIG REQUIRED)` works in the workspace build.
 - [x] Version check implemented: require same `MAJOR.MINOR`, warn on `PATCH`.
 - [x] ROS packaging metadata included from the start (convenience):
@@ -116,7 +116,7 @@ Bind only the pieces needed to create and tick trees using **built-in** BT.CPP n
 - [x] `Tree.rootNode` binding (introduce a read-only `TreeNode` wrapper for introspection).
 - [ ] Additional factory APIs needed for “real-world trees”:
   - [x] `BehaviorTreeFactory.registerBehaviorTreeFromFile/Text` + list/clear registered trees.
-  - [ ] Substitution rules APIs (clear/add/load/list).
+  - [x] Substitution rules APIs (clear/add/load/list).
 
 ### Stage 2 — Python nodes (subclassing-only)
 Enable Python-defined action nodes without patching BT.CPP.
@@ -177,8 +177,8 @@ Expose read-only and utility APIs for debugging and tooling.
 ### Stage 6 — Logging integrations (optional, feature-gated)
 Bind logger classes in a way that gracefully degrades when deps are missing.
 - [x] `StdCoutLogger`, `FileLogger2`, `MinitraceLogger`.
-- [ ] `SqliteLogger` (requires sqlite).
-- [ ] `Groot2Publisher` (requires ZeroMQ).
+- [x] `SqliteLogger` (requires sqlite).
+- [x] `Groot2Publisher` (requires ZeroMQ).
 
 ### Stage 7 — Packaging convenience (ROS + CI matrix)
 - [x] Provide ROS package metadata/build for convenience (ROS-agnostic core).
@@ -191,7 +191,7 @@ Bind logger classes in a way that gracefully degrades when deps are missing.
 - [x] Add threading/GIL regression tests:
   - [x] `tree.tick_*()` releases the GIL (other Python threads continue making progress).
   - [x] Ticking from a non-creating/non-main Python thread fails fast with a clear error.
-- [ ] Add stress tests for teardown/leaks (repeat create/tick/destroy loops).
+- [x] Add stress tests for teardown/leaks (repeat create/tick/destroy loops).
 
 ## Documentation
 - [ ] Quickstart: install + run a minimal tree.
