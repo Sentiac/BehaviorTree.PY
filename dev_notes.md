@@ -40,3 +40,11 @@ This file tracks decisions, surprises, and any blocked items encountered while i
   - `python3 -m pytest -q -p no:launch_testing -p no:launch_ros -p no:launch_pytest <tests...>`
   - or `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q <tests...>`
   - A small wrapper script is provided at `scripts/run_tests.sh`.
+
+### Threading + exception context
+- **Decision**: Fail fast when calling `Tree.tick_*()` and `Tree.halt_tree()` from any thread other than the one that created the `Tree`.
+  - Implementation: store a per-tree creator thread id and validate at the start of each of those methods.
+- **Decision**: Preserve Python exception types/tracebacks from Python-defined nodes, but add context using `BaseException.add_note(...)` (PEP 678):
+  - node `fullPath()`
+  - node `registrationName()`
+  - phase (`tick()`, `on_start()`, `on_running()`, `on_halted()`)

@@ -537,6 +537,28 @@ void blackboard_from_py_dict(BT::Blackboard& bb, const py::handle& obj)
   }
 }
 
+void add_python_exception_note(py::error_already_set& err, const BT::TreeNode& node,
+                               const char* phase)
+{
+  try
+  {
+    const py::object& exc = err.value();
+    if (exc.is_none() || !py::hasattr(exc, "add_note"))
+    {
+      return;
+    }
+
+    std::string note = std::string("BehaviorTree.PY: exception in ") + phase + " for node '"
+                       + node.fullPath() + "' (registration_id='" + node.registrationName()
+                       + "')";
+    exc.attr("add_note")(py::str(note));
+  }
+  catch (...)
+  {
+    // Best-effort: adding context must never mask the original exception.
+  }
+}
+
 class NodeHandle
 {
 public:
@@ -572,6 +594,44 @@ private:
   BT::TreeNode* node_;
 };
 
+class PyTree
+{
+public:
+  explicit PyTree(BT::Tree&& tree) :
+    tree_(std::move(tree)),
+    created_on_thread_id_(std::this_thread::get_id())
+  {}
+
+  PyTree(const PyTree&) = delete;
+  PyTree& operator=(const PyTree&) = delete;
+
+  PyTree(PyTree&&) = default;
+  PyTree& operator=(PyTree&&) = default;
+
+  [[nodiscard]] BT::Tree& tree()
+  {
+    return tree_;
+  }
+
+  [[nodiscard]] const BT::Tree& tree() const
+  {
+    return tree_;
+  }
+
+  void enforce_thread_or_throw(const char* method) const
+  {
+    if (std::this_thread::get_id() == created_on_thread_id_)
+    {
+      return;
+    }
+    throw std::runtime_error(std::string("Tree method called from a different thread: ") + method);
+  }
+
+private:
+  BT::Tree tree_;
+  std::thread::id created_on_thread_id_;
+};
+
 class PySyncActionNode final : public BT::SyncActionNode
 {
 public:
@@ -599,8 +659,16 @@ public:
   {
     enforce_thread_or_throw("tick");
     py::gil_scoped_acquire acquire;
-    py::object result = py_instance_.attr("tick")();
-    return result.cast<BT::NodeStatus>();
+    try
+    {
+      py::object result = py_instance_.attr("tick")();
+      return result.cast<BT::NodeStatus>();
+    }
+    catch (py::error_already_set& err)
+    {
+      add_python_exception_note(err, *this, "tick()");
+      throw;
+    }
   }
 
 private:
@@ -612,7 +680,7 @@ private:
     }
 
     throw std::runtime_error(std::string("Python node method called from a different thread: ")
-                                 + method);
+                             + method + " (node='" + fullPath() + "')");
   }
 
   std::thread::id created_on_thread_id_;
@@ -646,23 +714,47 @@ public:
   {
     enforce_thread_or_throw("on_start");
     py::gil_scoped_acquire acquire;
-    py::object result = py_instance_.attr("on_start")();
-    return result.cast<BT::NodeStatus>();
+    try
+    {
+      py::object result = py_instance_.attr("on_start")();
+      return result.cast<BT::NodeStatus>();
+    }
+    catch (py::error_already_set& err)
+    {
+      add_python_exception_note(err, *this, "on_start()");
+      throw;
+    }
   }
 
   BT::NodeStatus onRunning() override
   {
     enforce_thread_or_throw("on_running");
     py::gil_scoped_acquire acquire;
-    py::object result = py_instance_.attr("on_running")();
-    return result.cast<BT::NodeStatus>();
+    try
+    {
+      py::object result = py_instance_.attr("on_running")();
+      return result.cast<BT::NodeStatus>();
+    }
+    catch (py::error_already_set& err)
+    {
+      add_python_exception_note(err, *this, "on_running()");
+      throw;
+    }
   }
 
   void onHalted() override
   {
     enforce_thread_or_throw("on_halted");
     py::gil_scoped_acquire acquire;
-    py_instance_.attr("on_halted")();
+    try
+    {
+      py_instance_.attr("on_halted")();
+    }
+    catch (py::error_already_set& err)
+    {
+      add_python_exception_note(err, *this, "on_halted()");
+      throw;
+    }
   }
 
 private:
@@ -674,7 +766,7 @@ private:
     }
 
     throw std::runtime_error(std::string("Python node method called from a different thread: ")
-                                 + method);
+                             + method + " (node='" + fullPath() + "')");
   }
 
   std::thread::id created_on_thread_id_;
@@ -785,33 +877,37 @@ PYBIND11_MODULE(_core, m)
           py::arg("obj"),
           "Import using BT.CPP JsonExporter (requires BT.CPP-supported JSON formats).");
 
-  py::class_<BT::Tree>(m, "Tree")
+  py::class_<PyTree>(m, "Tree")
       .def(
           "tick_once",
-          [](BT::Tree& tree) {
+          [](PyTree& self) {
+            self.enforce_thread_or_throw("tick_once");
             py::gil_scoped_release release;
-            return tree.tickOnce();
+            return self.tree().tickOnce();
           },
           "Tick the tree once.")
       .def(
           "tick_exactly_once",
-          [](BT::Tree& tree) {
+          [](PyTree& self) {
+            self.enforce_thread_or_throw("tick_exactly_once");
             py::gil_scoped_release release;
-            return tree.tickExactlyOnce();
+            return self.tree().tickExactlyOnce();
           },
           "Tick the tree once, expecting completion in a single tick.")
       .def(
           "tick_while_running",
-          [](BT::Tree& tree, int sleep_ms) {
+          [](PyTree& self, int sleep_ms) {
+            self.enforce_thread_or_throw("tick_while_running");
             py::gil_scoped_release release;
-            return tree.tickWhileRunning(std::chrono::milliseconds(sleep_ms));
+            return self.tree().tickWhileRunning(std::chrono::milliseconds(sleep_ms));
           },
           py::arg("sleep_ms") = 10,
           "Tick until completion, sleeping between ticks.")
-      .def("root_blackboard", [](BT::Tree& tree) { return tree.rootBlackboard(); },
+      .def("root_blackboard", [](PyTree& self) { return self.tree().rootBlackboard(); },
            "Return the root blackboard.")
       .def("to_json",
-           [](const BT::Tree& tree) {
+           [](const PyTree& self) {
+             const BT::Tree& tree = self.tree();
              py::dict out;
              for (const auto& subtree : tree.subtrees)
              {
@@ -826,7 +922,8 @@ PYBIND11_MODULE(_core, m)
            },
            "Export the tree blackboards to a JSON-compatible Python object.")
       .def("from_json",
-           [](BT::Tree& tree, const py::object& obj) {
+           [](PyTree& self, const py::object& obj) {
+             BT::Tree& tree = self.tree();
              if (!py::isinstance<py::dict>(obj))
              {
                throw py::type_error("Expected a dict for tree import");
@@ -839,7 +936,7 @@ PYBIND11_MODULE(_core, m)
                {
                  name = subtree->tree_ID;
                }
-               const py::handle key = py::str(name);
+               const py::str key(name);
                if (!dict.contains(key))
                {
                  throw py::key_error("Missing subtree blackboard in import data: " + name);
@@ -850,19 +947,20 @@ PYBIND11_MODULE(_core, m)
            py::arg("obj"),
            "Import values into all tree blackboards from a JSON-compatible Python object.")
       .def("to_bt_json",
-           [](const BT::Tree& tree) { return json_to_py(BT::ExportTreeToJSON(tree)); },
+           [](const PyTree& self) { return json_to_py(BT::ExportTreeToJSON(self.tree())); },
            "Export using BT.CPP JsonExporter (may omit unsupported types).")
       .def("from_bt_json",
-           [](BT::Tree& tree, const py::object& obj) {
-             BT::ImportTreeFromJSON(py_to_json_strict(obj), tree);
+           [](PyTree& self, const py::object& obj) {
+             BT::ImportTreeFromJSON(py_to_json_strict(obj), self.tree());
            },
            py::arg("obj"),
            "Import using BT.CPP JsonExporter (requires BT.CPP-supported JSON formats).")
       .def(
           "halt_tree",
-          [](BT::Tree& tree) {
+          [](PyTree& self) {
+            self.enforce_thread_or_throw("halt_tree");
             py::gil_scoped_release release;
-            tree.haltTree();
+            self.tree().haltTree();
           },
           "Halt execution of the tree.");
 
@@ -916,18 +1014,16 @@ PYBIND11_MODULE(_core, m)
       .def(
           "create_tree_from_text",
           [](BT::BehaviorTreeFactory& factory, const std::string& text) {
-            return factory.createTreeFromText(text);
+            return PyTree(factory.createTreeFromText(text));
           },
           py::arg("text"),
-          py::return_value_policy::move,
           "Create a Tree from an XML string.")
       .def(
           "create_tree_from_file",
           [](BT::BehaviorTreeFactory& factory, const std::string& path) {
-            return factory.createTreeFromFile(path);
+            return PyTree(factory.createTreeFromFile(path));
           },
           py::arg("path"),
-          py::return_value_policy::move,
           "Create a Tree from an XML file path.");
 
 #ifdef BEHAVIORTREE_PY_VERSION
