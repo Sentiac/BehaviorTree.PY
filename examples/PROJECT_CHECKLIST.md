@@ -10,7 +10,7 @@ Non-goals:
 - Do not vendor or compile the core BT.CPP library.
 
 Current status:
-- Regression coverage currently lives in `../tests/` (Stages 1–5, except introspection + loggers).
+- Regression coverage currently lives in `../tests/` (Stages 1–6, including introspection + basic loggers).
 - Runnable cookbook scripts live in this folder (`examples/`).
 
 ## Project setup
@@ -65,7 +65,7 @@ Current status:
   - [x] Stage 4: plugin-based examples (`registerFromPlugin`) and file-based trees. (covered by `../tests/test_stage4_create_from_file.py` + `../tests/test_stage4_plugin_loading.py`)
   - [x] Stage 5a: JSON import/export helpers. (covered by `../tests/test_stage5_json_export_import.py`)
   - [x] Stage 5b: introspection examples (requires `TreeNode` wrappers / `Tree.rootNode` bindings).
-  - [ ] Stage 6: logger integration examples (feature-gated by installed deps).
+  - [x] Stage 6: logger integration tests (covered by `../tests/test_stage6_loggers.py`).
 - [x] Factory registration of Python action nodes (sync). (covered by `../tests/test_stage2_python_nodes.py`)
 - [x] Stateful action nodes (start/running/halt). (covered by `../tests/test_stage2_python_nodes.py`)
 - [ ] Async/cooperative pattern (if supported) and cancellation semantics.
@@ -86,6 +86,9 @@ Current status:
   - [x] `stage4_plugin_loading.py` (builds a small plugin at runtime via CMake).
   - [x] `stage5_json_roundtrip.py` (tree + blackboard export/import).
   - [x] `stage5_introspection.py` (TreeNode wrappers).
+  - [ ] `stage6_loggers.py` (StdCoutLogger/FileLogger2/MinitraceLogger).
+  - [ ] `stage3_typed_ports.py` (typed `provided_ports()` dict specs + enforcement).
+  - [ ] `stage2_control_decorator_nodes.py` (Python ControlNode/DecoratorNode patterns).
 
 ## Data interchange examples
 - [x] Primitive ports: bool/int/double/string. (covered by `../tests/test_stage3_ports_and_blackboard.py`)

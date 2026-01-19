@@ -28,7 +28,7 @@ Non-goals:
   - [x] Require same `MAJOR.MINOR` between `behaviortree_py` and installed `behaviortree_cpp`.
   - [x] Allow `PATCH` mismatch with a warning.
 - [x] Encode runtime check (at import-time or module init) that reads installed BT.CPP version from the linked library and warns/errors per policy.
-- [ ] Define tagging scheme and release process (tags, changelog).
+- [ ] Define tagging scheme and release process (tags, changelog, release notes).
 
 ## Build & link against BehaviorTree.CPP
 - [x] Build/link against `behaviortree_cpp::behaviortree_cpp` via `find_package(behaviortree_cpp CONFIG REQUIRED)`.
@@ -79,7 +79,7 @@ Non-goals:
 - [x] Lifetime/ownership (decision):
   - [x] C++ node wrappers hold strong references to Python instances for the lifetime of the tree/node.
   - [x] Destruction releases Python refs deterministically when the tree is destroyed/reset (with GIL held).
-- [ ] Error propagation (decision):
+- [x] Error propagation (decision):
   - [x] Python exceptions raised inside node overrides propagate and abort the current tick (fail-fast, BT.CPP-aligned).
   - [x] Provide clear exception context (node name/path, phase: `tick`/`on_start`/`on_running`/`on_halted`).
 
@@ -103,7 +103,7 @@ Each stage should be completed with:
 - [ ] `pyproject.toml` drives the CMake build (`pip install .`) (validate this path end-to-end).
 - [x] `find_package(behaviortree_cpp CONFIG REQUIRED)` works in the workspace build.
 - [x] Version check implemented: require same `MAJOR.MINOR`, warn on `PATCH`.
-- [ ] ROS packaging metadata included from the start (convenience):
+- [x] ROS packaging metadata included from the start (convenience):
   - [x] `package.xml` + minimal `CMakeLists.txt` hooks for colcon/ament workflows.
   - [x] Keep ROS packaging thin; do not hardcode ROS paths.
 - [x] `source install/setup.bash` makes `behaviortree_py` importable (PYTHONPATH hook installed).
@@ -116,7 +116,7 @@ Bind only the pieces needed to create and tick trees using **built-in** BT.CPP n
 - [x] `Tree.rootNode` binding (introduce a read-only `TreeNode` wrapper for introspection).
 - [ ] Additional factory APIs needed for “real-world trees”:
   - [x] `BehaviorTreeFactory.registerBehaviorTreeFromFile/Text` + list/clear registered trees.
-  - [ ] Substitution rules APIs (where exposed as non-template methods).
+  - [ ] Substitution rules APIs (clear/add/load/list).
 
 ### Stage 2 — Python nodes (subclassing-only)
 Enable Python-defined action nodes without patching BT.CPP.
@@ -149,7 +149,7 @@ Implement the agreed type/JSON rules without extending BT.CPP.
   - [x] `None` allowed only in JSON lane (`null`)
 - [ ] Provide strict conversions and actionable errors (“why treated as JSON”, etc.).
 - [x] Bind minimal blackboard APIs needed for examples (set/get, introspection as needed).
-- [ ] Extend the port spec beyond “AnyTypeAllowed”:
+- [x] Extend the port spec beyond “AnyTypeAllowed”:
   - [x] Support INOUT ports.
   - [x] Support typed ports (PortInfo/TypeInfo) and enforce the typed/JSON contract against port types.
   - [x] Expose `PortDirection`, `PortInfo`, and `TypeInfo` in Python for introspection/debugging.
@@ -160,6 +160,7 @@ Prove interoperability with externally-built nodes and file-based trees.
 - [ ] Example trees using plugins and subtrees/includes (where supported by BT.CPP parser).
 - [x] Avoid assumptions about build artifact paths (plugin-load test compiles a plugin into a temp dir).
 - [ ] Document plugin workflow (how to build a BT.CPP plugin + load it from Python/ROS overlays).
+  - [ ] Document required `BT_PLUGIN_EXPORT` compile definition for plugin symbol export.
 
 ### Stage 5 — Introspection + JSON import/export utilities
 Expose read-only and utility APIs for debugging and tooling.
@@ -187,9 +188,9 @@ Bind logger classes in a way that gracefully degrades when deps are missing.
 - [x] Add a minimal test suite that runs against the workspace BT.CPP build.
 - [ ] Add CI recipe (container or local instructions).
 - [ ] Add a pip-based smoke test job (`pip install .` against a system/workspace BT.CPP).
-- [ ] Add threading/GIL regression tests:
-  - [ ] `tree.tick_*()` releases the GIL (other Python threads continue making progress).
-  - [ ] Ticking from a non-creating/non-main Python thread fails fast with a clear error.
+- [x] Add threading/GIL regression tests:
+  - [x] `tree.tick_*()` releases the GIL (other Python threads continue making progress).
+  - [x] Ticking from a non-creating/non-main Python thread fails fast with a clear error.
 - [ ] Add stress tests for teardown/leaks (repeat create/tick/destroy loops).
 
 ## Documentation
