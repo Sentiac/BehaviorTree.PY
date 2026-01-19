@@ -24,14 +24,16 @@ python3 ros2_ws/src/BehaviorTree.PY/examples/stage1_minimal_tick.py
 python3 ros2_ws/src/BehaviorTree.PY/examples/stage2_sync_action.py
 python3 ros2_ws/src/BehaviorTree.PY/examples/stage2_stateful_action.py
 python3 ros2_ws/src/BehaviorTree.PY/examples/stage2_condition_node.py
+python3 ros2_ws/src/BehaviorTree.PY/examples/stage2_control_decorator_nodes.py
 python3 ros2_ws/src/BehaviorTree.PY/examples/stage3_value_contract.py
+python3 ros2_ws/src/BehaviorTree.PY/examples/stage3_typed_ports.py
 python3 ros2_ws/src/BehaviorTree.PY/examples/stage4_create_from_file.py
 python3 ros2_ws/src/BehaviorTree.PY/examples/stage4_plugin_loading.py
 python3 ros2_ws/src/BehaviorTree.PY/examples/stage5_json_roundtrip.py
 python3 ros2_ws/src/BehaviorTree.PY/examples/stage5_introspection.py
+python3 ros2_ws/src/BehaviorTree.PY/examples/stage6_loggers.py
 ```
 
 Notes:
 - `stage4_plugin_loading.py` compiles a small C++ plugin at runtime; it requires a working compiler toolchain and CMake.
 - Regression tests live under `../tests/` and can be run with `../scripts/run_tests.sh`.
-
