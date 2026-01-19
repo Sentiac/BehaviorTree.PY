@@ -48,3 +48,6 @@ This file tracks decisions, surprises, and any blocked items encountered while i
   - node `fullPath()`
   - node `registrationName()`
   - phase (`tick()`, `on_start()`, `on_running()`, `on_halted()`)
+
+### Condition nodes
+- **Decision**: Provide Python `ConditionNode` subclassing support (BT.CPP `NodeType::CONDITION`) using the same `_bt` handle + `provided_ports()` contract as action nodes.

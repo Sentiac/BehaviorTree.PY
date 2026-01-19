@@ -10,7 +10,7 @@ from ._core import (
     btcpp_version_number,
     btcpp_version_string,
 )
-from .nodes import StatefulActionNode, SyncActionNode
+from .nodes import ConditionNode, StatefulActionNode, SyncActionNode
 
 
 _VERSION_RE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
@@ -61,6 +61,7 @@ __all__ = [
     "__version__",
     "Blackboard",
     "BehaviorTreeFactory",
+    "ConditionNode",
     "NodeStatus",
     "StatefulActionNode",
     "SyncActionNode",

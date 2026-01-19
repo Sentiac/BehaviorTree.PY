@@ -31,6 +31,15 @@ class MyStateful(bt.StatefulActionNode):
         return None
 
 
+class MyCondition(bt.ConditionNode):
+    @classmethod
+    def provided_ports(cls) -> dict[str, list[str]]:
+        return {"inputs": [], "outputs": []}
+
+    def tick(self) -> bt.NodeStatus:
+        return bt.NodeStatus.SUCCESS
+
+
 def test_python_sync_action_node_ticks() -> None:
     factory = bt.BehaviorTreeFactory()
     factory.register_sync_action(MySync)
@@ -62,3 +71,18 @@ def test_python_stateful_action_node_ticks() -> None:
     tree = factory.create_tree_from_text(xml)
     assert tree.tick_while_running(sleep_ms=0) == bt.NodeStatus.SUCCESS
 
+
+def test_python_condition_node_ticks() -> None:
+    factory = bt.BehaviorTreeFactory()
+    factory.register_condition(MyCondition)
+
+    xml = """
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <MyCondition/>
+  </BehaviorTree>
+</root>
+""".strip()
+
+    tree = factory.create_tree_from_text(xml)
+    assert tree.tick_once() == bt.NodeStatus.SUCCESS

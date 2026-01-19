@@ -43,3 +43,21 @@ class StatefulActionNode:
 
     def set_output(self, key: str, value) -> None:
         self._bt.set_output(key, value)  # set internally by the native wrapper
+
+
+class ConditionNode:
+    def __init__(self, name: str, *args: object, **kwargs: object) -> None:
+        self.name = name
+
+    @classmethod
+    def provided_ports(cls) -> dict[str, list[str]]:
+        return {"inputs": [], "outputs": []}
+
+    def tick(self) -> NodeStatus:
+        raise NotImplementedError
+
+    def get_input(self, key: str):
+        return self._bt.get_input(key)  # set internally by the native wrapper
+
+    def set_output(self, key: str, value) -> None:
+        self._bt.set_output(key, value)  # set internally by the native wrapper

@@ -14,6 +14,7 @@
 #include <behaviortree_cpp/blackboard.h>
 #include <behaviortree_cpp/behavior_tree.h>
 #include <behaviortree_cpp/bt_factory.h>
+#include <behaviortree_cpp/condition_node.h>
 #include <behaviortree_cpp/json_export.h>
 #include <behaviortree_cpp/utils/demangle_util.h>
 
@@ -773,6 +774,61 @@ private:
   py::object py_instance_;
 };
 
+class PyConditionNode final : public BT::ConditionNode
+{
+public:
+  PyConditionNode(const std::string& name, const BT::NodeConfig& config, py::type type,
+                  py::tuple ctor_args, py::dict ctor_kwargs) :
+    BT::ConditionNode(name, config),
+    created_on_thread_id_(std::this_thread::get_id())
+  {
+    py::gil_scoped_acquire acquire;
+    py_instance_ = type(py::str(name), *ctor_args, **ctor_kwargs);
+    py_instance_.attr("_bt") = py::cast(NodeHandle(this));
+  }
+
+  ~PyConditionNode() override
+  {
+    if (!Py_IsInitialized())
+    {
+      return;
+    }
+    py::gil_scoped_acquire acquire;
+    py_instance_ = py::none();
+  }
+
+  BT::NodeStatus tick() override
+  {
+    enforce_thread_or_throw("tick");
+    py::gil_scoped_acquire acquire;
+    try
+    {
+      py::object result = py_instance_.attr("tick")();
+      return result.cast<BT::NodeStatus>();
+    }
+    catch (py::error_already_set& err)
+    {
+      add_python_exception_note(err, *this, "tick()");
+      throw;
+    }
+  }
+
+private:
+  void enforce_thread_or_throw(const char* method) const
+  {
+    if (std::this_thread::get_id() == created_on_thread_id_)
+    {
+      return;
+    }
+
+    throw std::runtime_error(std::string("Python node method called from a different thread: ")
+                             + method + " (node='" + fullPath() + "')");
+  }
+
+  std::thread::id created_on_thread_id_;
+  py::object py_instance_;
+};
+
 BT::NodeBuilder make_sync_action_builder(const py::type& type, const py::args& args,
                                         const py::kwargs& kwargs)
 {
@@ -794,6 +850,18 @@ BT::NodeBuilder make_stateful_action_builder(const py::type& type, const py::arg
   return [type, ctor_args, ctor_kwargs](const std::string& name,
                                        const BT::NodeConfig& config) -> std::unique_ptr<BT::TreeNode> {
     return std::make_unique<PyStatefulActionNode>(name, config, type, ctor_args, ctor_kwargs);
+  };
+}
+
+BT::NodeBuilder make_condition_builder(const py::type& type, const py::args& args,
+                                       const py::kwargs& kwargs)
+{
+  py::tuple ctor_args(args);
+  py::dict ctor_kwargs(kwargs);
+
+  return [type, ctor_args, ctor_kwargs](const std::string& name,
+                                        const BT::NodeConfig& config) -> std::unique_ptr<BT::TreeNode> {
+    return std::make_unique<PyConditionNode>(name, config, type, ctor_args, ctor_kwargs);
   };
 }
 
@@ -1002,6 +1070,26 @@ PYBIND11_MODULE(_core, m)
           },
           py::arg("node_type"),
           "Register a Python StatefulActionNode type.\n\n"
+          "The node class must define @classmethod provided_ports() -> dict with keys:\n"
+          "  - 'inputs': list[str]\n"
+          "  - 'outputs': list[str]\n"
+          "The constructor is called as: node_type(name, *args, **kwargs).")
+      .def(
+          "register_condition",
+          [](BT::BehaviorTreeFactory& factory, const py::type& type, const py::args& args,
+             const py::kwargs& kwargs) {
+            const std::string name = type.attr("__name__").cast<std::string>();
+
+            BT::TreeNodeManifest manifest;
+            manifest.type = BT::NodeType::CONDITION;
+            manifest.registration_ID = name;
+            manifest.ports = extract_ports_list_or_throw(type);
+            manifest.metadata = {};
+
+            factory.registerBuilder(manifest, make_condition_builder(type, args, kwargs));
+          },
+          py::arg("node_type"),
+          "Register a Python ConditionNode type.\n\n"
           "The node class must define @classmethod provided_ports() -> dict with keys:\n"
           "  - 'inputs': list[str]\n"
           "  - 'outputs': list[str]\n"
