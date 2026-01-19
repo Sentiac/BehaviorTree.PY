@@ -103,3 +103,11 @@ This file tracks decisions, surprises, and any blocked items encountered while i
   - `BehaviorTreeFactory.substitution_rules()`
 - **TestNodeConfig dict keys**: `return_status`, `async_delay_ms` (also accepts BT.CPP-style `async_delay`), `success_script`, `failure_script`, `post_script`.
 - **Design choice**: `TestNodeConfig.complete_func` is intentionally not supported from Python because it requires storing a `std::function` with tricky lifetime/capture semantics across the language boundary.
+
+### pip install workflow
+- **Status**: `pip install .` works against the workspace overlay only if the ROS environment is sourced.
+- **Reason**: the workspace `behaviortree_cpp` is installed as a ROS/ament package and its generated CMake config may
+  `find_package(ament_cmake_libraries)` via `ament_cmake_export_dependencies`. Without `/opt/ros/<distro>` on
+  `CMAKE_PREFIX_PATH`, pure pip builds cannot configure against that BT.CPP install.
+- **Mitigation**: `scripts/pip_install_smoke.sh` sources `/opt/ros/$ROS_DISTRO/setup.bash` when available before running
+  the pip build.

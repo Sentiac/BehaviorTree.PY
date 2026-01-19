@@ -78,8 +78,13 @@ find_package(pybind11 CONFIG REQUIRED)
 find_package(behaviortree_cpp CONFIG REQUIRED)
 
 # Optional ROS/ament integration (thin wrapper; ROS-agnostic core)
+set(_btpy_is_skbuild OFF)
+if(DEFINED SKBUILD_PLATLIB_DIR)
+  set(_btpy_is_skbuild ON)
+endif()
+
 find_package(ament_cmake QUIET)
-if(ament_cmake_FOUND)
+if(ament_cmake_FOUND AND NOT _btpy_is_skbuild)
   find_package(ament_cmake_python REQUIRED)
 endif()
 
@@ -110,7 +115,7 @@ else()
   set(_btpy_python_install_dir "${CMAKE_INSTALL_LIBDIR}/python3/dist-packages")
 endif()
 
-if(ament_cmake_FOUND)
+if(ament_cmake_FOUND AND NOT _btpy_is_skbuild)
   # Installs the pure-Python package and registers the PYTHONPATH environment hook so
   # that `source install/setup.bash` makes the package importable.
   ament_python_install_package(behaviortree_py)
@@ -127,6 +132,6 @@ install(TARGETS _core
   ARCHIVE DESTINATION "${_btpy_python_install_dir}/behaviortree_py"
 )
 
-if(ament_cmake_FOUND)
+if(ament_cmake_FOUND AND NOT _btpy_is_skbuild)
   ament_package()
 endif()
