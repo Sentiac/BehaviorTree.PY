@@ -9,6 +9,10 @@ This folder serves two purposes:
 Non-goals:
 - Do not vendor or compile the core BT.CPP library.
 
+Current status:
+- Regression coverage currently lives in `../tests/` (Stages 1–5, except introspection + loggers).
+- This `examples/` folder does not yet contain runnable cookbook scripts.
+
 ## Project setup
 - [ ] Decide build system for examples:
   - [ ] pure Python (recommended for most examples), plus optional CMake for custom-type plugins
@@ -27,14 +31,15 @@ Non-goals:
 - [ ] Stage 0 command set (copy/paste):
   - [ ] `cd ../../.. && cd ros2_ws && source /opt/ros/<distro>/setup.bash && colcon build --symlink-install && source install/setup.bash`
   - [ ] `python3 -c "import behaviortree_py; print(behaviortree_py.btcpp_version_string())"`
-- [ ] Import test: `import behaviortree_py` and confirm it can locate `libbehaviortree_cpp.so`.
+- [x] Import test: `import behaviortree_py` and confirm it can locate `libbehaviortree_cpp.so`. (covered by `../tests/test_stage1_smoke.py`)
 - [ ] Verify version compatibility checks:
   - [ ] Default requires same `MAJOR.MINOR` and warns on `PATCH` mismatch.
-- [ ] Minimal tree tick: create a trivial tree from XML/text and tick to completion.
-- [ ] Blackboard read/write: set a value, read it back, confirm expected conversion semantics.
+- [x] Minimal tree tick: create a trivial tree from XML/text and tick to completion. (covered by `../tests/test_stage1_smoke.py`)
+- [x] Blackboard read/write: set a value, read it back, confirm expected conversion semantics. (covered by `../tests/test_stage3_ports_and_blackboard.py`)
 - [ ] Strict input semantics:
   - [ ] Missing inputs raise (no optional/sentinel read API).
-  - [ ] Conversion failures raise with actionable messages.
+  - [x] Conversion failures raise. (covered by `../tests/test_stage3_ports_and_blackboard.py`)
+  - [ ] Conversion failures include actionable messages (port name, expected type, and why the value was treated as JSON).
 - [ ] GIL policy:
   - [ ] Confirm other Python threads run while `tree.tick_*()` is executing (GIL released in C++ sections).
   - [ ] Confirm Python overrides are called with GIL held.
@@ -52,36 +57,46 @@ Non-goals:
 
 ## Feature coverage examples (incremental)
 - [ ] Stage mapping (keep in sync with `PROJECT_CHECKLIST.md`):
-  - [ ] Stage 1: create/tick built-in trees (no Python nodes).
-  - [ ] Stage 2: Python `SyncActionNode` and `StatefulActionNode` subclass examples using `provided_ports()`.
-  - [ ] Stage 3: typed primitives/lists + JSON lane + strict error examples.
-  - [ ] Stage 4: plugin-based examples (`registerFromPlugin`) and file-based trees.
-  - [ ] Stage 5: introspection and JSON import/export examples.
+  - [x] Stage 1: create/tick built-in trees (no Python nodes). (covered by `../tests/test_stage1_smoke.py`)
+  - [x] Stage 2: Python `SyncActionNode` and `StatefulActionNode` subclass examples using `provided_ports()`. (covered by `../tests/test_stage2_python_nodes.py`)
+  - [x] Stage 3: typed primitives/lists + JSON lane + strict error examples. (covered by `../tests/test_stage3_ports_and_blackboard.py`)
+  - [x] Stage 4: plugin-based examples (`registerFromPlugin`) and file-based trees. (covered by `../tests/test_stage4_create_from_file.py` + `../tests/test_stage4_plugin_loading.py`)
+  - [x] Stage 5a: JSON import/export helpers. (covered by `../tests/test_stage5_json_export_import.py`)
+  - [ ] Stage 5b: introspection examples (requires `TreeNode` wrappers / `Tree.rootNode` bindings).
   - [ ] Stage 6: logger integration examples (feature-gated by installed deps).
-- [ ] Factory registration of Python action nodes (sync).
-- [ ] Stateful action nodes (start/running/halt).
+- [x] Factory registration of Python action nodes (sync). (covered by `../tests/test_stage2_python_nodes.py`)
+- [x] Stateful action nodes (start/running/halt). (covered by `../tests/test_stage2_python_nodes.py`)
 - [ ] Async/cooperative pattern (if supported) and cancellation semantics.
 - [ ] Subtrees, includes, and tree composition patterns.
 - [ ] Plugins: loading and using shared-library nodes from system install (if applicable).
 - [ ] Logging / monitoring examples (as supported by BT.CPP install).
 - [ ] Ports declaration patterns:
-  - [ ] Demonstrate `@classmethod provided_ports()` on Python subclasses.
+  - [x] Demonstrate `@classmethod provided_ports()` on Python subclasses. (covered by `../tests/test_stage2_python_nodes.py`)
   - [ ] Demonstrate validation failures and error messages for malformed port specs.
 
+- [ ] Add runnable cookbook scripts under `examples/` (not just pytest):
+  - [ ] `stage1_minimal_tick.py` (built-in nodes only).
+  - [ ] `stage2_sync_action.py` (Python `SyncActionNode` subclass + ports).
+  - [ ] `stage2_stateful_action.py` (Python `StatefulActionNode` lifecycle + halting).
+  - [ ] `stage3_value_contract.py` (typed primitives/lists + JSON lane + failure cases).
+  - [ ] `stage4_create_from_file.py` (+ sample XML under `examples/trees/`).
+  - [ ] `stage4_plugin_loading.py` (+ small plugin project under `examples/plugins/`).
+  - [ ] `stage5_json_roundtrip.py` (tree + blackboard export/import).
+
 ## Data interchange examples
-- [ ] Primitive ports: bool/int/double/string.
-- [ ] List ports: `list[int]`, `list[float]`, `list[str]` (as supported).
-- [ ] JSON fallback lane: dict/nested list structures with round-trip checks.
+- [x] Primitive ports: bool/int/double/string. (covered by `../tests/test_stage3_ports_and_blackboard.py`)
+- [x] List ports: `list[int]`, `list[float]`, `list[str]` (as supported). (covered by `../tests/test_stage3_ports_and_blackboard.py`)
+- [x] JSON fallback lane: dict/nested list structures with round-trip checks. (covered by `../tests/test_stage3_ports_and_blackboard.py`)
 - [ ] Explicit “payload/config port” convention examples (JSON values not intended to feed typed C++ ports).
-- [ ] Mixed-type JSON arrays should raise clear errors (documented limitation).
+- [x] Mixed-type JSON arrays should raise clear errors (documented limitation). (covered by `../tests/test_stage3_ports_and_blackboard.py`)
 - [ ] Pattern: replacing “mixed-type array” payloads with a custom struct:
   - [ ] Show a schema as a C++ struct with named fields (instead of heterogeneous arrays).
   - [ ] Register a BT.CPP JSON converter for that struct in a small helper library / type plugin.
   - [ ] Python passes a `dict` (JSON object) that maps to the struct via the converter.
   - [ ] (Optional) also expose the struct as a real Python class via a pybind11 type plugin.
 - [ ] `None` handling (decision):
-  - [ ] `None` allowed only in JSON lane and maps to JSON `null`.
-  - [ ] `None` rejected for typed ports/values, with clear error messages.
+  - [x] `None` allowed only in JSON lane and maps to JSON `null`. (covered by `../tests/test_stage3_ports_and_blackboard.py`)
+  - [ ] `None` rejected for typed ports/values, with clear error messages. (blocked until typed ports exist)
 - [ ] Failure examples: demonstrate and explain conversion errors.
 
 ## Custom C++ struct interop examples (key deliverable)
@@ -105,5 +120,8 @@ Non-goals:
   - [ ] prerequisites
   - [ ] expected output
   - [ ] troubleshooting section
+- [ ] Add `examples/README.md` that:
+  - [ ] Links to `../tests/` for regression coverage.
+  - [ ] Provides a copy/paste “run examples” flow against the workspace overlay.
 - [ ] Add a “matrix” mapping example → feature(s) covered.
 - [ ] Add a “platform matrix” mapping example → which environments it was validated on (ROS distros).
