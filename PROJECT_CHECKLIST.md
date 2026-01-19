@@ -54,6 +54,7 @@ Non-goals:
 - [ ] Error UX:
   - [ ] When a value is treated as JSON, error/warn messages explain why (e.g., “nested list → JSON mode”) and suggest typed alternatives.
   - [ ] Define failure modes (type errors, conversion errors) and error messages.
+  - [x] Include element indices/types in list/JSON errors and include node/port context in `get_input`/`set_output`.
 
 ## API coverage (bindings)
 - [x] Expose core factory operations (register node types, create trees from XML/text/file).

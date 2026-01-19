@@ -37,9 +37,10 @@ Current status:
 - [x] Minimal tree tick: create a trivial tree from XML/text and tick to completion. (covered by `../tests/test_stage1_smoke.py`)
 - [x] Blackboard read/write: set a value, read it back, confirm expected conversion semantics. (covered by `../tests/test_stage3_ports_and_blackboard.py`)
 - [ ] Strict input semantics:
-  - [ ] Missing inputs raise (no optional/sentinel read API).
+  - [x] Missing inputs raise (no optional/sentinel read API).
   - [x] Conversion failures raise. (covered by `../tests/test_stage3_ports_and_blackboard.py`)
-  - [ ] Conversion failures include actionable messages (port name, expected type, and why the value was treated as JSON).
+  - [ ] Conversion failures include actionable messages (expected type, and why the value was treated as JSON).
+  - [x] Errors include node/port context and list indices/types where applicable.
 - [ ] GIL policy:
   - [x] Confirm other Python threads run while `tree.tick_*()` is executing (GIL released in C++ sections).
   - [ ] Confirm Python overrides are called with GIL held.

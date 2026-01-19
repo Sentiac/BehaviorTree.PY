@@ -85,6 +85,47 @@ BT::PortsList extract_ports_list_or_throw(const py::type& type)
   return ports;
 }
 
+std::string py_type_name(const py::handle& obj)
+{
+  try
+  {
+    return py::cast<std::string>(py::type::of(obj).attr("__name__"));
+  }
+  catch (...)
+  {
+    return "<unknown>";
+  }
+}
+
+const char* json_value_type_name(nlohmann::json::value_t type)
+{
+  switch (type)
+  {
+  case nlohmann::json::value_t::null:
+    return "null";
+  case nlohmann::json::value_t::object:
+    return "object";
+  case nlohmann::json::value_t::array:
+    return "array";
+  case nlohmann::json::value_t::string:
+    return "string";
+  case nlohmann::json::value_t::boolean:
+    return "boolean";
+  case nlohmann::json::value_t::number_integer:
+    return "int";
+  case nlohmann::json::value_t::number_unsigned:
+    return "uint";
+  case nlohmann::json::value_t::number_float:
+    return "float";
+  case nlohmann::json::value_t::binary:
+    return "binary";
+  case nlohmann::json::value_t::discarded:
+    return "discarded";
+  default:
+    return "unknown";
+  }
+}
+
 int64_t py_int_to_int64(const py::handle& obj)
 {
   const py::int_ i = py::reinterpret_borrow<py::int_>(obj);
@@ -110,6 +151,7 @@ nlohmann::json py_sequence_to_json_array_strict(const py::handle& seq_handle)
 
   bool first = true;
   nlohmann::json::value_t element_type = nlohmann::json::value_t::null;
+  size_t index = 0;
 
   for (py::handle item : seq)
   {
@@ -121,9 +163,12 @@ nlohmann::json py_sequence_to_json_array_strict(const py::handle& seq_handle)
     }
     else if (child.type() != element_type)
     {
-      throw py::type_error("JSON arrays must be homogeneous (mixed element types)");
+      throw py::type_error(std::string("JSON arrays must be homogeneous: element 0 is ")
+                           + json_value_type_name(element_type) + ", element "
+                           + std::to_string(index) + " is " + json_value_type_name(child.type()));
     }
     array.push_back(std::move(child));
+    ++index;
   }
 
   return array;
@@ -164,7 +209,8 @@ nlohmann::json py_to_json_strict(const py::handle& obj)
       const py::handle key_obj = item.first;
       if (!py::isinstance<py::str>(key_obj))
       {
-        throw py::type_error("JSON object keys must be strings");
+        throw py::type_error(std::string("JSON object keys must be strings (got ")
+                             + py_type_name(key_obj) + ")");
       }
       const auto key = py::cast<std::string>(key_obj);
       json_obj[key] = py_to_json_strict(item.second);
@@ -172,7 +218,8 @@ nlohmann::json py_to_json_strict(const py::handle& obj)
     return json_obj;
   }
 
-  throw py::type_error("Value is not JSON-serializable under BehaviorTree.PY rules");
+  throw py::type_error(std::string("Value is not JSON-serializable under BehaviorTree.PY rules: ")
+                       + py_type_name(obj));
 }
 
 py::object json_to_py(const nlohmann::json& json)
@@ -327,13 +374,16 @@ BT::Result set_output_from_py(BT::TreeNode& node, const std::string& key,
     {
       std::vector<bool> out;
       out.reserve(n);
+      size_t index = 0;
       for (py::handle item : seq)
       {
         if (!py::isinstance<py::bool_>(item))
         {
-          throw py::type_error("Typed bool list must contain only bool elements");
+          throw py::type_error(std::string("Typed bool list must contain only bool elements; element ")
+                               + std::to_string(index) + " is " + py_type_name(item));
         }
         out.push_back(py::cast<bool>(item));
+        ++index;
       }
       return node.setOutput(key, out);
     }
@@ -342,13 +392,17 @@ BT::Result set_output_from_py(BT::TreeNode& node, const std::string& key,
     {
       std::vector<int64_t> out;
       out.reserve(n);
+      size_t index = 0;
       for (py::handle item : seq)
       {
         if (!py::isinstance<py::int_>(item) || py::isinstance<py::bool_>(item))
         {
-          throw py::type_error("Typed int list must contain only int elements (no bool/float)");
+          throw py::type_error(std::string(
+                                   "Typed int list must contain only int elements (no bool/float); element ")
+                               + std::to_string(index) + " is " + py_type_name(item));
         }
         out.push_back(py_int_to_int64(item));
+        ++index;
       }
       return node.setOutput(key, out);
     }
@@ -357,13 +411,16 @@ BT::Result set_output_from_py(BT::TreeNode& node, const std::string& key,
     {
       std::vector<double> out;
       out.reserve(n);
+      size_t index = 0;
       for (py::handle item : seq)
       {
         if (!py::isinstance<py::float_>(item))
         {
-          throw py::type_error("Typed float list must contain only float elements");
+          throw py::type_error(std::string("Typed float list must contain only float elements; element ")
+                               + std::to_string(index) + " is " + py_type_name(item));
         }
         out.push_back(py::cast<double>(item));
+        ++index;
       }
       return node.setOutput(key, out);
     }
@@ -372,13 +429,16 @@ BT::Result set_output_from_py(BT::TreeNode& node, const std::string& key,
     {
       std::vector<std::string> out;
       out.reserve(n);
+      size_t index = 0;
       for (py::handle item : seq)
       {
         if (!py::isinstance<py::str>(item))
         {
-          throw py::type_error("Typed string list must contain only str elements");
+          throw py::type_error(std::string("Typed string list must contain only str elements; element ")
+                               + std::to_string(index) + " is " + py_type_name(item));
         }
         out.push_back(py::cast<std::string>(item));
+        ++index;
       }
       return node.setOutput(key, out);
     }
@@ -392,7 +452,9 @@ BT::Result set_output_from_py(BT::TreeNode& node, const std::string& key,
     return node.setOutput(key, py_to_json_strict(value));
   }
 
-  throw py::type_error("Unsupported value type for set_output()");
+  throw py::type_error(
+      std::string("Unsupported value type for set_output(): ") + py_type_name(value)
+      + " (supported: bool/int/float/str, lists of primitives, dict/None for JSON lane)");
 }
 
 void blackboard_set_from_py(BT::Blackboard& bb, const std::string& key, const py::handle& value)
@@ -437,13 +499,16 @@ void blackboard_set_from_py(BT::Blackboard& bb, const std::string& key, const py
     {
       std::vector<bool> out;
       out.reserve(n);
+      size_t index = 0;
       for (py::handle item : seq)
       {
         if (!py::isinstance<py::bool_>(item))
         {
-          throw py::type_error("Typed bool list must contain only bool elements");
+          throw py::type_error(std::string("Typed bool list must contain only bool elements; element ")
+                               + std::to_string(index) + " is " + py_type_name(item));
         }
         out.push_back(py::cast<bool>(item));
+        ++index;
       }
       bb.set(key, out);
       return;
@@ -452,13 +517,17 @@ void blackboard_set_from_py(BT::Blackboard& bb, const std::string& key, const py
     {
       std::vector<int64_t> out;
       out.reserve(n);
+      size_t index = 0;
       for (py::handle item : seq)
       {
         if (!py::isinstance<py::int_>(item) || py::isinstance<py::bool_>(item))
         {
-          throw py::type_error("Typed int list must contain only int elements (no bool/float)");
+          throw py::type_error(std::string(
+                                   "Typed int list must contain only int elements (no bool/float); element ")
+                               + std::to_string(index) + " is " + py_type_name(item));
         }
         out.push_back(py_int_to_int64(item));
+        ++index;
       }
       bb.set(key, out);
       return;
@@ -467,13 +536,16 @@ void blackboard_set_from_py(BT::Blackboard& bb, const std::string& key, const py
     {
       std::vector<double> out;
       out.reserve(n);
+      size_t index = 0;
       for (py::handle item : seq)
       {
         if (!py::isinstance<py::float_>(item))
         {
-          throw py::type_error("Typed float list must contain only float elements");
+          throw py::type_error(std::string("Typed float list must contain only float elements; element ")
+                               + std::to_string(index) + " is " + py_type_name(item));
         }
         out.push_back(py::cast<double>(item));
+        ++index;
       }
       bb.set(key, out);
       return;
@@ -482,13 +554,16 @@ void blackboard_set_from_py(BT::Blackboard& bb, const std::string& key, const py
     {
       std::vector<std::string> out;
       out.reserve(n);
+      size_t index = 0;
       for (py::handle item : seq)
       {
         if (!py::isinstance<py::str>(item))
         {
-          throw py::type_error("Typed string list must contain only str elements");
+          throw py::type_error(std::string("Typed string list must contain only str elements; element ")
+                               + std::to_string(index) + " is " + py_type_name(item));
         }
         out.push_back(py::cast<std::string>(item));
+        ++index;
       }
       bb.set(key, out);
       return;
@@ -503,7 +578,9 @@ void blackboard_set_from_py(BT::Blackboard& bb, const std::string& key, const py
     return;
   }
 
-  throw py::type_error("Unsupported value type for Blackboard.set()");
+  throw py::type_error(
+      std::string("Unsupported value type for Blackboard.set(): ") + py_type_name(value)
+      + " (supported: bool/int/float/str, lists of primitives, dict/None for JSON lane)");
 }
 
 py::dict blackboard_to_py_dict(const BT::Blackboard& bb)
@@ -580,7 +657,9 @@ public:
     auto res = node_->getInput(key, out);
     if (!res)
     {
-      throw std::runtime_error(res.error());
+      throw std::runtime_error(
+          "get_input('" + key + "') failed for node '" + node_->fullPath()
+          + "' (registration_id='" + node_->registrationName() + "'): " + res.error());
     }
     return any_to_py(out);
   }
@@ -590,7 +669,9 @@ public:
     auto res = set_output_from_py(*node_, key, value);
     if (!res)
     {
-      throw std::runtime_error(res.error());
+      throw std::runtime_error(
+          "set_output('" + key + "') failed for node '" + node_->fullPath()
+          + "' (registration_id='" + node_->registrationName() + "'): " + res.error());
     }
   }
 

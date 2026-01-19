@@ -75,3 +75,9 @@ This file tracks decisions, surprises, and any blocked items encountered while i
   - `ControlNode` (multi-child semantics via `_bt.children_count` / `_bt.tick_child(i)` / `_bt.halt_child(i)`).
 - **Halt callback semantics**: Python `halt()` is invoked only when the node was `RUNNING`, mirroring BT.CPP’s `StatefulActionNode::halt()` pattern.
   - Reason: BT.CPP `Tree::haltTree()` calls `haltNode()` on the root twice (direct + recursive visitor) and expects node `halt()` implementations to be safe/no-op when not running.
+
+### Value contract error UX
+- **Improved errors**:
+  - typed list validation errors include the failing element index and Python type,
+  - JSON array homogeneity errors include index + expected/actual JSON type,
+  - `get_input(...)` / `set_output(...)` errors include node `fullPath()` and `registration_id`.

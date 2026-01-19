@@ -74,6 +74,37 @@ def test_mixed_list_rejected() -> None:
 
     tree = factory.create_tree_from_text(xml)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match=r"element 1.*str"):
         tree.tick_once()
 
+
+class MissingInput(bt.SyncActionNode):
+    @classmethod
+    def provided_ports(cls) -> dict[str, list[str]]:
+        return {"inputs": [], "outputs": []}
+
+    def tick(self) -> bt.NodeStatus:
+        self.get_input("missing")
+        return bt.NodeStatus.SUCCESS
+
+
+def test_missing_input_error_includes_context() -> None:
+    factory = bt.BehaviorTreeFactory()
+    factory.register_sync_action(MissingInput)
+
+    tree = factory.create_tree_from_text(
+        """
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <MissingInput/>
+  </BehaviorTree>
+</root>
+""".strip()
+    )
+
+    with pytest.raises(RuntimeError) as excinfo:
+        tree.tick_once()
+
+    msg = str(excinfo.value)
+    assert "get_input('missing')" in msg
+    assert "registration_id='MissingInput'" in msg
