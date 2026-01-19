@@ -599,6 +599,106 @@ public:
     return node_->name();
   }
 
+  [[nodiscard]] BT::NodeStatus tick_child() const
+  {
+    auto* decorator = dynamic_cast<BT::DecoratorNode*>(node_);
+    if (!decorator)
+    {
+      throw std::runtime_error("tick_child() is only valid for DecoratorNode");
+    }
+    BT::TreeNode* child = decorator->child();
+    if (!child)
+    {
+      throw std::runtime_error("DecoratorNode has no child to tick");
+    }
+    py::gil_scoped_release release;
+    return child->executeTick();
+  }
+
+  [[nodiscard]] BT::NodeStatus tick_child(size_t index) const
+  {
+    auto* control = dynamic_cast<BT::ControlNode*>(node_);
+    if (!control)
+    {
+      throw std::runtime_error("tick_child(index) is only valid for ControlNode");
+    }
+    if (index >= control->childrenCount())
+    {
+      throw std::out_of_range("ControlNode child index out of range: " + std::to_string(index));
+    }
+    py::gil_scoped_release release;
+    return control->children().at(index)->executeTick();
+  }
+
+  void halt_child() const
+  {
+    auto* decorator = dynamic_cast<BT::DecoratorNode*>(node_);
+    if (!decorator)
+    {
+      throw std::runtime_error("halt_child() is only valid for DecoratorNode");
+    }
+    py::gil_scoped_release release;
+    decorator->haltChild();
+  }
+
+  void halt_child(size_t index) const
+  {
+    auto* control = dynamic_cast<BT::ControlNode*>(node_);
+    if (!control)
+    {
+      throw std::runtime_error("halt_child(index) is only valid for ControlNode");
+    }
+    if (index >= control->childrenCount())
+    {
+      throw std::out_of_range("ControlNode child index out of range: " + std::to_string(index));
+    }
+    py::gil_scoped_release release;
+    control->haltChild(index);
+  }
+
+  void halt_children() const
+  {
+    auto* control = dynamic_cast<BT::ControlNode*>(node_);
+    if (!control)
+    {
+      throw std::runtime_error("halt_children() is only valid for ControlNode");
+    }
+    py::gil_scoped_release release;
+    control->haltChildren();
+  }
+
+  void reset_child() const
+  {
+    auto* decorator = dynamic_cast<BT::DecoratorNode*>(node_);
+    if (!decorator)
+    {
+      throw std::runtime_error("reset_child() is only valid for DecoratorNode");
+    }
+    py::gil_scoped_release release;
+    decorator->resetChild();
+  }
+
+  void reset_children() const
+  {
+    auto* control = dynamic_cast<BT::ControlNode*>(node_);
+    if (!control)
+    {
+      throw std::runtime_error("reset_children() is only valid for ControlNode");
+    }
+    py::gil_scoped_release release;
+    control->resetChildren();
+  }
+
+  [[nodiscard]] size_t children_count() const
+  {
+    auto* control = dynamic_cast<BT::ControlNode*>(node_);
+    if (!control)
+    {
+      throw std::runtime_error("children_count() is only valid for ControlNode");
+    }
+    return control->childrenCount();
+  }
+
 private:
   BT::TreeNode* node_;
 };
@@ -837,6 +937,162 @@ private:
   py::object py_instance_;
 };
 
+class PyDecoratorNode final : public BT::DecoratorNode
+{
+public:
+  PyDecoratorNode(const std::string& name, const BT::NodeConfig& config, py::type type,
+                  py::tuple ctor_args, py::dict ctor_kwargs) :
+    BT::DecoratorNode(name, config),
+    created_on_thread_id_(std::this_thread::get_id())
+  {
+    py::gil_scoped_acquire acquire;
+    py_instance_ = type(py::str(name), *ctor_args, **ctor_kwargs);
+    py_instance_.attr("_bt") = py::cast(NodeHandle(this));
+  }
+
+  ~PyDecoratorNode() override
+  {
+    if (!Py_IsInitialized())
+    {
+      return;
+    }
+    py::gil_scoped_acquire acquire;
+    py_instance_ = py::none();
+  }
+
+  BT::NodeStatus tick() override
+  {
+    enforce_thread_or_throw("tick");
+    py::gil_scoped_acquire acquire;
+    try
+    {
+      py::object result = py_instance_.attr("tick")();
+      return result.cast<BT::NodeStatus>();
+    }
+    catch (py::error_already_set& err)
+    {
+      add_python_exception_note(err, *this, "tick()");
+      throw;
+    }
+  }
+
+  void halt() override
+  {
+    enforce_thread_or_throw("halt");
+
+    const bool was_running = (status() == BT::NodeStatus::RUNNING);
+    BT::DecoratorNode::halt();
+
+    if (!was_running || !Py_IsInitialized())
+    {
+      return;
+    }
+    py::gil_scoped_acquire acquire;
+    try
+    {
+      py_instance_.attr("halt")();
+    }
+    catch (py::error_already_set& err)
+    {
+      add_python_exception_note(err, *this, "halt()");
+      throw;
+    }
+  }
+
+private:
+  void enforce_thread_or_throw(const char* method) const
+  {
+    if (std::this_thread::get_id() == created_on_thread_id_)
+    {
+      return;
+    }
+
+    throw std::runtime_error(std::string("Python node method called from a different thread: ")
+                             + method + " (node='" + fullPath() + "')");
+  }
+
+  std::thread::id created_on_thread_id_;
+  py::object py_instance_;
+};
+
+class PyControlNode final : public BT::ControlNode
+{
+public:
+  PyControlNode(const std::string& name, const BT::NodeConfig& config, py::type type,
+                py::tuple ctor_args, py::dict ctor_kwargs) :
+    BT::ControlNode(name, config),
+    created_on_thread_id_(std::this_thread::get_id())
+  {
+    py::gil_scoped_acquire acquire;
+    py_instance_ = type(py::str(name), *ctor_args, **ctor_kwargs);
+    py_instance_.attr("_bt") = py::cast(NodeHandle(this));
+  }
+
+  ~PyControlNode() override
+  {
+    if (!Py_IsInitialized())
+    {
+      return;
+    }
+    py::gil_scoped_acquire acquire;
+    py_instance_ = py::none();
+  }
+
+  BT::NodeStatus tick() override
+  {
+    enforce_thread_or_throw("tick");
+    py::gil_scoped_acquire acquire;
+    try
+    {
+      py::object result = py_instance_.attr("tick")();
+      return result.cast<BT::NodeStatus>();
+    }
+    catch (py::error_already_set& err)
+    {
+      add_python_exception_note(err, *this, "tick()");
+      throw;
+    }
+  }
+
+  void halt() override
+  {
+    enforce_thread_or_throw("halt");
+
+    const bool was_running = (status() == BT::NodeStatus::RUNNING);
+    BT::ControlNode::halt();
+
+    if (!was_running || !Py_IsInitialized())
+    {
+      return;
+    }
+    py::gil_scoped_acquire acquire;
+    try
+    {
+      py_instance_.attr("halt")();
+    }
+    catch (py::error_already_set& err)
+    {
+      add_python_exception_note(err, *this, "halt()");
+      throw;
+    }
+  }
+
+private:
+  void enforce_thread_or_throw(const char* method) const
+  {
+    if (std::this_thread::get_id() == created_on_thread_id_)
+    {
+      return;
+    }
+
+    throw std::runtime_error(std::string("Python node method called from a different thread: ")
+                             + method + " (node='" + fullPath() + "')");
+  }
+
+  std::thread::id created_on_thread_id_;
+  py::object py_instance_;
+};
+
 BT::NodeBuilder make_sync_action_builder(const py::type& type, const py::args& args,
                                         const py::kwargs& kwargs)
 {
@@ -870,6 +1126,30 @@ BT::NodeBuilder make_condition_builder(const py::type& type, const py::args& arg
   return [type, ctor_args, ctor_kwargs](const std::string& name,
                                         const BT::NodeConfig& config) -> std::unique_ptr<BT::TreeNode> {
     return std::make_unique<PyConditionNode>(name, config, type, ctor_args, ctor_kwargs);
+  };
+}
+
+BT::NodeBuilder make_decorator_builder(const py::type& type, const py::args& args,
+                                      const py::kwargs& kwargs)
+{
+  py::tuple ctor_args(args);
+  py::dict ctor_kwargs(kwargs);
+
+  return [type, ctor_args, ctor_kwargs](const std::string& name,
+                                       const BT::NodeConfig& config) -> std::unique_ptr<BT::TreeNode> {
+    return std::make_unique<PyDecoratorNode>(name, config, type, ctor_args, ctor_kwargs);
+  };
+}
+
+BT::NodeBuilder make_control_builder(const py::type& type, const py::args& args,
+                                    const py::kwargs& kwargs)
+{
+  py::tuple ctor_args(args);
+  py::dict ctor_kwargs(kwargs);
+
+  return [type, ctor_args, ctor_kwargs](const std::string& name,
+                                       const BT::NodeConfig& config) -> std::unique_ptr<BT::TreeNode> {
+    return std::make_unique<PyControlNode>(name, config, type, ctor_args, ctor_kwargs);
   };
 }
 
@@ -1022,6 +1302,26 @@ PYBIND11_MODULE(_core, m)
   py::class_<NodeHandle>(m, "_NodeHandle")
       .def("get_input", &NodeHandle::get_input, py::arg("key"))
       .def("set_output", &NodeHandle::set_output, py::arg("key"), py::arg("value"))
+      .def("tick_child",
+           py::overload_cast<>(&NodeHandle::tick_child, py::const_),
+           "Tick the child of a DecoratorNode and return its status.")
+      .def("tick_child",
+           py::overload_cast<size_t>(&NodeHandle::tick_child, py::const_),
+           py::arg("index"),
+           "Tick the child at index of a ControlNode and return its status.")
+      .def("halt_child",
+           py::overload_cast<>(&NodeHandle::halt_child, py::const_),
+           "Halt the child of a DecoratorNode.")
+      .def("halt_child",
+           py::overload_cast<size_t>(&NodeHandle::halt_child, py::const_),
+           py::arg("index"),
+           "Halt the child at index of a ControlNode.")
+      .def("halt_children", &NodeHandle::halt_children, "Halt all children of a ControlNode.")
+      .def("reset_child", &NodeHandle::reset_child, "Reset the child of a DecoratorNode to IDLE.")
+      .def("reset_children", &NodeHandle::reset_children, "Reset all children of a ControlNode to IDLE.")
+      .def_property_readonly("children_count",
+                             &NodeHandle::children_count,
+                             "Number of children (ControlNode only).")
       .def_property_readonly("name", &NodeHandle::name);
 
   py::class_<BT::Blackboard, BT::Blackboard::Ptr>(m, "Blackboard")
@@ -1289,6 +1589,48 @@ PYBIND11_MODULE(_core, m)
           },
           py::arg("node_type"),
           "Register a Python ConditionNode type.\n\n"
+          "The node class must define @classmethod provided_ports() -> dict with keys:\n"
+          "  - 'inputs': list[str]\n"
+          "  - 'outputs': list[str]\n"
+          "  - 'inouts': list[str] (optional)\n"
+          "The constructor is called as: node_type(name, *args, **kwargs).")
+      .def(
+          "register_decorator",
+          [](BT::BehaviorTreeFactory& factory, const py::type& type, const py::args& args,
+             const py::kwargs& kwargs) {
+            const std::string name = type.attr("__name__").cast<std::string>();
+
+            BT::TreeNodeManifest manifest;
+            manifest.type = BT::NodeType::DECORATOR;
+            manifest.registration_ID = name;
+            manifest.ports = extract_ports_list_or_throw(type);
+            manifest.metadata = {};
+
+            factory.registerBuilder(manifest, make_decorator_builder(type, args, kwargs));
+          },
+          py::arg("node_type"),
+          "Register a Python DecoratorNode type.\n\n"
+          "The node class must define @classmethod provided_ports() -> dict with keys:\n"
+          "  - 'inputs': list[str]\n"
+          "  - 'outputs': list[str]\n"
+          "  - 'inouts': list[str] (optional)\n"
+          "The constructor is called as: node_type(name, *args, **kwargs).")
+      .def(
+          "register_control",
+          [](BT::BehaviorTreeFactory& factory, const py::type& type, const py::args& args,
+             const py::kwargs& kwargs) {
+            const std::string name = type.attr("__name__").cast<std::string>();
+
+            BT::TreeNodeManifest manifest;
+            manifest.type = BT::NodeType::CONTROL;
+            manifest.registration_ID = name;
+            manifest.ports = extract_ports_list_or_throw(type);
+            manifest.metadata = {};
+
+            factory.registerBuilder(manifest, make_control_builder(type, args, kwargs));
+          },
+          py::arg("node_type"),
+          "Register a Python ControlNode type.\n\n"
           "The node class must define @classmethod provided_ports() -> dict with keys:\n"
           "  - 'inputs': list[str]\n"
           "  - 'outputs': list[str]\n"

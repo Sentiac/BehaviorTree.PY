@@ -68,3 +68,10 @@ This file tracks decisions, surprises, and any blocked items encountered while i
   - `registered_behavior_trees`, `clear_registered_behavior_trees`
   - `create_tree(tree_name)`
 - **Introspection**: Exposed `TypeInfo` and `PortInfo` classes; `TreeNode.ports_info` returns `PortInfo` objects per port.
+
+### Decorator + control nodes (Python)
+- **Added**: Python subclassing support for:
+  - `DecoratorNode` (single-child semantics via `_bt.tick_child()` / `_bt.halt_child()`),
+  - `ControlNode` (multi-child semantics via `_bt.children_count` / `_bt.tick_child(i)` / `_bt.halt_child(i)`).
+- **Halt callback semantics**: Python `halt()` is invoked only when the node was `RUNNING`, mirroring BT.CPP’s `StatefulActionNode::halt()` pattern.
+  - Reason: BT.CPP `Tree::haltTree()` calls `haltNode()` on the root twice (direct + recursive visitor) and expects node `halt()` implementations to be safe/no-op when not running.

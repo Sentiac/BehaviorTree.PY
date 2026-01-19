@@ -135,8 +135,8 @@ Enable Python-defined action nodes without patching BT.CPP.
   - [x] tick only from creating/main Python thread (initial).
 - [ ] Expand Python node coverage toward BT.CPP parity:
   - [x] `ConditionNode` subclassing support.
-  - [ ] `DecoratorNode` subclassing support (single-child semantics).
-  - [ ] `ControlNode` subclassing support (multi-child semantics + halting rules).
+  - [x] `DecoratorNode` subclassing support (single-child semantics).
+  - [x] `ControlNode` subclassing support (multi-child semantics + halting rules).
   - [x] Add clear exception context (node path/name + phase) when rethrowing Python exceptions.
 
 ### Stage 3 — Data interchange contract + blackboard surface
