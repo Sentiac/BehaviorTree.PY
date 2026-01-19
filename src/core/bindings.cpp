@@ -76,6 +76,12 @@ BT::PortsList extract_ports_list_or_throw(const py::type& type)
     ports.insert(BT::OutputPort<BT::AnyTypeAllowed>(name));
   }
 
+  for (py::handle name_obj : get_str_list("inouts"))
+  {
+    const auto name = py::cast<std::string>(name_obj);
+    ports.insert(BT::BidirectionalPort<BT::AnyTypeAllowed>(name));
+  }
+
   return ports;
 }
 
@@ -899,6 +905,15 @@ PYBIND11_MODULE(_core, m)
       .value("INOUT", BT::PortDirection::INOUT)
       .export_values();
 
+  py::class_<BT::TypeInfo>(m, "TypeInfo")
+      .def_property_readonly("type_name", &BT::TypeInfo::typeName)
+      .def_property_readonly("is_strongly_typed", &BT::TypeInfo::isStronglyTyped);
+
+  py::class_<BT::PortInfo, BT::TypeInfo>(m, "PortInfo")
+      .def_property_readonly("direction", &BT::PortInfo::direction)
+      .def_property_readonly("description", &BT::PortInfo::description)
+      .def_property_readonly("default_value_string", &BT::PortInfo::defaultValueString);
+
   py::class_<BT::TreeNode>(m, "TreeNode")
       .def_property_readonly("uid", &BT::TreeNode::UID)
       .def_property_readonly("name", [](const BT::TreeNode& node) { return node.name(); })
@@ -965,6 +980,20 @@ PYBIND11_MODULE(_core, m)
             return out;
           },
           "Ports declared for this node (from its manifest).")
+      .def_property_readonly("ports_info",
+                             [](const BT::TreeNode& node) {
+                               py::dict out;
+                               const auto* manifest = node.config().manifest;
+                               if (!manifest)
+                               {
+                                 return out;
+                               }
+                               for (const auto& kv : manifest->ports)
+                               {
+                                 out[py::str(kv.first)] = py::cast(kv.second);
+                               }
+                               return out;
+                             })
       .def(
           "children",
           [](const py::object& self) {
@@ -1221,6 +1250,7 @@ PYBIND11_MODULE(_core, m)
           "The node class must define @classmethod provided_ports() -> dict with keys:\n"
           "  - 'inputs': list[str]\n"
           "  - 'outputs': list[str]\n"
+          "  - 'inouts': list[str] (optional)\n"
           "The constructor is called as: node_type(name, *args, **kwargs).")
       .def(
           "register_stateful_action",
@@ -1241,6 +1271,7 @@ PYBIND11_MODULE(_core, m)
           "The node class must define @classmethod provided_ports() -> dict with keys:\n"
           "  - 'inputs': list[str]\n"
           "  - 'outputs': list[str]\n"
+          "  - 'inouts': list[str] (optional)\n"
           "The constructor is called as: node_type(name, *args, **kwargs).")
       .def(
           "register_condition",
@@ -1261,6 +1292,7 @@ PYBIND11_MODULE(_core, m)
           "The node class must define @classmethod provided_ports() -> dict with keys:\n"
           "  - 'inputs': list[str]\n"
           "  - 'outputs': list[str]\n"
+          "  - 'inouts': list[str] (optional)\n"
           "The constructor is called as: node_type(name, *args, **kwargs).")
       .def(
           "register_from_plugin",
@@ -1280,7 +1312,42 @@ PYBIND11_MODULE(_core, m)
             return PyTree(factory.createTreeFromFile(path));
           },
           py::arg("path"),
-          "Create a Tree from an XML file path.");
+          "Create a Tree from an XML file path.")
+      .def(
+          "register_behavior_tree_from_file",
+          [](BT::BehaviorTreeFactory& factory, const std::string& path) {
+            factory.registerBehaviorTreeFromFile(path);
+          },
+          py::arg("path"),
+          "Register one or more BehaviorTree definitions from an XML file (no instantiation).")
+      .def(
+          "register_behavior_tree_from_text",
+          [](BT::BehaviorTreeFactory& factory, const std::string& text) {
+            factory.registerBehaviorTreeFromText(text);
+          },
+          py::arg("text"),
+          "Register one or more BehaviorTree definitions from XML text (no instantiation).")
+      .def(
+          "registered_behavior_trees",
+          [](const BT::BehaviorTreeFactory& factory) {
+            py::list out;
+            for (const auto& name : factory.registeredBehaviorTrees())
+            {
+              out.append(py::str(name));
+            }
+            return out;
+          },
+          "Return IDs of BehaviorTrees registered via register_behavior_tree_*.")
+      .def("clear_registered_behavior_trees",
+           &BT::BehaviorTreeFactory::clearRegisteredBehaviorTrees,
+           "Clear previously-registered BehaviorTrees.")
+      .def(
+          "create_tree",
+          [](BT::BehaviorTreeFactory& factory, const std::string& tree_name) {
+            return PyTree(factory.createTree(tree_name));
+          },
+          py::arg("tree_name"),
+          "Instantiate a previously-registered BehaviorTree by ID.");
 
 #ifdef BEHAVIORTREE_PY_VERSION
   m.attr("__behaviortree_py_version__") = py::str(BEHAVIORTREE_PY_VERSION);

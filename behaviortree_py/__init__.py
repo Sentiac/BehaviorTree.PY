@@ -8,8 +8,10 @@ from ._core import (
     NodeType,
     NodeStatus,
     PortDirection,
+    PortInfo,
     Tree,
     TreeNode,
+    TypeInfo,
     btcpp_version_number,
     btcpp_version_string,
 )
@@ -68,10 +70,12 @@ __all__ = [
     "NodeType",
     "NodeStatus",
     "PortDirection",
+    "PortInfo",
     "StatefulActionNode",
     "SyncActionNode",
     "Tree",
     "TreeNode",
+    "TypeInfo",
     "btcpp_version_number",
     "btcpp_version_string",
 ]

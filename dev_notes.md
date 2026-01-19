@@ -58,3 +58,11 @@ This file tracks decisions, surprises, and any blocked items encountered while i
   - `TreeNode` properties: `name`, `full_path`, `registration_name`, `uid`, `status`, `type`, `ports`, `blackboard`, `input_ports`, `output_ports`
   - `TreeNode.children()` for Control/Decorator nodes
 - **Bugfix**: `Tree.from_json()` previously used a temporary `py::str` stored as `py::handle`, causing a dangling reference and a potential segfault under repeated calls. Fixed by owning the key as `py::str`.
+
+### Ports + factory registry APIs
+- **Ports spec**: `provided_ports()` now also accepts `{"inouts": [...]}` and maps it to BT.CPP `BidirectionalPort`.
+- **Factory**: Bound the registered-tree workflow:
+  - `register_behavior_tree_from_file/text`
+  - `registered_behavior_trees`, `clear_registered_behavior_trees`
+  - `create_tree(tree_name)`
+- **Introspection**: Exposed `TypeInfo` and `PortInfo` classes; `TreeNode.ports_info` returns `PortInfo` objects per port.
