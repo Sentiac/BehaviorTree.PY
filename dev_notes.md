@@ -94,6 +94,9 @@ This file tracks decisions, surprises, and any blocked items encountered while i
   - `StdCoutLogger`
   - `FileLogger2`
   - `MinitraceLogger`
+- **Added**: optional BT.CPP loggers (available when the linked BT.CPP build includes their deps):
+  - `SqliteLogger(tree, filepath, append=False)` (requires `.db3` suffix)
+  - `Groot2Publisher(tree, server_port=1667)` (binds a TCP port; ZeroMQ)
 
 ### Substitution rules (factory)
 - **Added**: bindings for BT.CPP substitution rules:

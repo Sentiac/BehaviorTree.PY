@@ -25,6 +25,8 @@
 #include <behaviortree_cpp/loggers/bt_cout_logger.h>
 #include <behaviortree_cpp/loggers/bt_file_logger_v2.h>
 #include <behaviortree_cpp/loggers/bt_minitrace_logger.h>
+#include <behaviortree_cpp/loggers/bt_sqlite_logger.h>
+#include <behaviortree_cpp/loggers/groot2_publisher.h>
 #include <behaviortree_cpp/utils/demangle_util.h>
 
 namespace py = pybind11;
@@ -1443,6 +1445,85 @@ private:
   std::unique_ptr<BT::MinitraceLogger> logger_;
 };
 
+class PySqliteLogger
+{
+public:
+  PySqliteLogger(py::object tree_obj, const std::string& filepath, bool append) :
+    tree_obj_(std::move(tree_obj))
+  {
+    const auto& tree = tree_obj_.cast<const PyTree&>().tree();
+    logger_ = std::make_unique<BT::SqliteLogger>(tree, std::filesystem::path(filepath), append);
+  }
+
+  ~PySqliteLogger()
+  {
+    if (!Py_IsInitialized())
+    {
+      return;
+    }
+    py::gil_scoped_acquire acquire;
+    tree_obj_ = py::none();
+  }
+
+  void flush()
+  {
+    logger_->flush();
+  }
+
+  void exec_sql_statement(const std::string& statement)
+  {
+    logger_->execSqlStatement(statement);
+  }
+
+private:
+  py::object tree_obj_;
+  std::unique_ptr<BT::SqliteLogger> logger_;
+};
+
+class PyGroot2Publisher
+{
+public:
+  PyGroot2Publisher(py::object tree_obj, unsigned server_port) :
+    tree_obj_(std::move(tree_obj))
+  {
+    const auto& tree = tree_obj_.cast<const PyTree&>().tree();
+    publisher_ = std::make_unique<BT::Groot2Publisher>(tree, server_port);
+  }
+
+  ~PyGroot2Publisher()
+  {
+    if (!Py_IsInitialized())
+    {
+      return;
+    }
+    py::gil_scoped_acquire acquire;
+    tree_obj_ = py::none();
+  }
+
+  void flush()
+  {
+    static_cast<BT::StatusChangeLogger*>(publisher_.get())->flush();
+  }
+
+  void set_max_heartbeat_delay_ms(int64_t ms)
+  {
+    if (ms < 0)
+    {
+      throw py::value_error("max_heartbeat_delay_ms must be >= 0");
+    }
+    publisher_->setMaxHeartbeatDelay(std::chrono::milliseconds(ms));
+  }
+
+  int64_t max_heartbeat_delay_ms() const
+  {
+    return publisher_->maxHeartbeatDelay().count();
+  }
+
+private:
+  py::object tree_obj_;
+  std::unique_ptr<BT::Groot2Publisher> publisher_;
+};
+
 class PySyncActionNode final : public BT::SyncActionNode
 {
 public:
@@ -2244,6 +2325,22 @@ PYBIND11_MODULE(_core, m)
            py::arg("tree"),
            py::arg("filename_json"))
       .def("flush", &PyMinitraceLogger::flush);
+
+  py::class_<PySqliteLogger>(m, "SqliteLogger")
+      .def(py::init<py::object, std::string, bool>(),
+           py::arg("tree"),
+           py::arg("filepath"),
+           py::arg("append") = false)
+      .def("flush", &PySqliteLogger::flush)
+      .def("exec_sql_statement", &PySqliteLogger::exec_sql_statement, py::arg("statement"));
+
+  py::class_<PyGroot2Publisher>(m, "Groot2Publisher")
+      .def(py::init<py::object, unsigned>(), py::arg("tree"), py::arg("server_port") = 1667)
+      .def("flush", &PyGroot2Publisher::flush)
+      .def("set_max_heartbeat_delay_ms",
+           &PyGroot2Publisher::set_max_heartbeat_delay_ms,
+           py::arg("ms"))
+      .def("max_heartbeat_delay_ms", &PyGroot2Publisher::max_heartbeat_delay_ms);
 
   py::class_<BT::BehaviorTreeFactory>(m, "BehaviorTreeFactory")
       .def(py::init<>())
