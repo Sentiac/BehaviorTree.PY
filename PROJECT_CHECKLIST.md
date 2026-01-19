@@ -73,13 +73,14 @@ Non-goals:
   - [x] Release the GIL while BT.CPP runs/ticks.
   - [x] Acquire the GIL only when invoking Python overrides (`tick`, `on_start`, `on_running`, `on_halted`) and other Python callbacks.
   - [x] Thread-safety scope (initial): ticking supported only from the creating/main Python thread.
-  - [ ] Document the contract clearly and fail fast if called from unexpected threads (where feasible).
+  - [x] Fail fast if called from unexpected threads (where feasible).
+  - [ ] Document the contract clearly.
 - [x] Lifetime/ownership (decision):
   - [x] C++ node wrappers hold strong references to Python instances for the lifetime of the tree/node.
   - [x] Destruction releases Python refs deterministically when the tree is destroyed/reset (with GIL held).
 - [ ] Error propagation (decision):
   - [x] Python exceptions raised inside node overrides propagate and abort the current tick (fail-fast, BT.CPP-aligned).
-  - [ ] Provide clear exception context (node name/path, phase: `tick`/`on_start`/`on_running`/`on_halted`).
+  - [x] Provide clear exception context (node name/path, phase: `tick`/`on_start`/`on_running`/`on_halted`).
 
 ## Custom type strategy (user-defined C++ structs)
 - [ ] Define “type plugin” concept:
@@ -111,9 +112,9 @@ Bind only the pieces needed to create and tick trees using **built-in** BT.CPP n
 - [x] `NodeStatus` surfaced cleanly.
 - [x] `BehaviorTreeFactory`: `createTreeFromText`, `createTreeFromFile`, `registerFromPlugin`.
 - [x] `Tree`: `tickOnce`, `tickExactlyOnce`, `tickWhileRunning`, `haltTree`, `rootBlackboard`.
-- [ ] `Tree.rootNode` binding (introduce a read-only `TreeNode` wrapper for introspection).
+- [x] `Tree.rootNode` binding (introduce a read-only `TreeNode` wrapper for introspection).
 - [ ] Additional factory APIs needed for “real-world trees”:
-  - [ ] `BehaviorTreeFactory.registerBehaviorTreeFromFile/Text` + list/clear registered trees.
+  - [x] `BehaviorTreeFactory.registerBehaviorTreeFromFile/Text` + list/clear registered trees.
   - [ ] Substitution rules APIs (where exposed as non-template methods).
 
 ### Stage 2 — Python nodes (subclassing-only)
@@ -133,10 +134,10 @@ Enable Python-defined action nodes without patching BT.CPP.
   - [x] release GIL for C++ ticking; acquire only for Python overrides.
   - [x] tick only from creating/main Python thread (initial).
 - [ ] Expand Python node coverage toward BT.CPP parity:
-  - [ ] `ConditionNode` subclassing support.
+  - [x] `ConditionNode` subclassing support.
   - [ ] `DecoratorNode` subclassing support (single-child semantics).
   - [ ] `ControlNode` subclassing support (multi-child semantics + halting rules).
-  - [ ] Add clear exception context (node path/name + phase) when rethrowing Python exceptions.
+  - [x] Add clear exception context (node path/name + phase) when rethrowing Python exceptions.
 
 ### Stage 3 — Data interchange contract + blackboard surface
 Implement the agreed type/JSON rules without extending BT.CPP.
@@ -148,9 +149,9 @@ Implement the agreed type/JSON rules without extending BT.CPP.
 - [ ] Provide strict conversions and actionable errors (“why treated as JSON”, etc.).
 - [x] Bind minimal blackboard APIs needed for examples (set/get, introspection as needed).
 - [ ] Extend the port spec beyond “AnyTypeAllowed”:
-  - [ ] Support INOUT ports.
+  - [x] Support INOUT ports.
   - [ ] Support typed ports (PortInfo/TypeInfo) and enforce the typed/JSON contract against port types.
-  - [ ] Expose `PortDirection`, `PortInfo`, and `TypeInfo` in Python for introspection/debugging.
+  - [x] Expose `PortDirection`, `PortInfo`, and `TypeInfo` in Python for introspection/debugging.
 
 ### Stage 4 — Plugins + real-world trees
 Prove interoperability with externally-built nodes and file-based trees.
@@ -161,14 +162,15 @@ Prove interoperability with externally-built nodes and file-based trees.
 
 ### Stage 5 — Introspection + JSON import/export utilities
 Expose read-only and utility APIs for debugging and tooling.
-- [ ] `Tree.applyVisitor`, `Tree.getNodesByPath` (or equivalent) where feasible.
+- [x] `Tree.applyVisitor`, `Tree.getNodesByPath` (or equivalent) where feasible.
 - [x] `ExportTreeToJSON` / `ImportTreeFromJSON` bindings.
 - [x] JSON export/import helpers using BehaviorTree.PY conversion rules.
 - [ ] Serialized status snapshot utilities if needed by downstream tooling.
-- [ ] Introduce read-only `TreeNode` wrappers for introspection:
-  - [ ] name/fullPath/status/type/registration_id
-  - [ ] parent/children traversal where applicable
-  - [ ] access to manifest/ports for each node
+- [x] Introduce read-only `TreeNode` wrappers for introspection:
+  - [x] name/fullPath/status/type/registration_name
+  - [x] children traversal where applicable
+  - [ ] parent traversal where feasible
+  - [x] access to manifest/ports for each node
 
 ### Stage 6 — Logging integrations (optional, feature-gated)
 Bind logger classes in a way that gracefully degrades when deps are missing.

@@ -11,21 +11,21 @@ Non-goals:
 
 Current status:
 - Regression coverage currently lives in `../tests/` (Stages 1–5, except introspection + loggers).
-- This `examples/` folder does not yet contain runnable cookbook scripts.
+- Runnable cookbook scripts live in this folder (`examples/`).
 
 ## Project setup
-- [ ] Decide build system for examples:
-  - [ ] pure Python (recommended for most examples), plus optional CMake for custom-type plugins
+- [x] Decide build system for examples:
+  - [x] pure Python scripts (recommended for most examples), plus optional CMake for custom-type plugins
   - [ ] or monorepo-style workspace instructions
 - [ ] Document prerequisites:
-  - [ ] Workspace is built and sourced (see repo root `README.md`).
+  - [x] Workspace is built and sourced (see repo root `README.md`).
   - [ ] Python version(s)
-  - [ ] `pybind11` / compiler toolchain (only for custom-type plugin examples)
-- [ ] Keep examples ROS-agnostic:
-  - [ ] no hardcoded ROS paths in code; environment setup is documented only.
-- [ ] If `BehaviorTree.PY` ships ROS metadata, add a colcon-based “happy path” for examples:
-  - [ ] workspace layout + commands to build/install behaviortree_py via colcon
-  - [ ] confirm examples run against the workspace overlay
+  - [x] compiler toolchain (only for custom-type plugin examples)
+- [x] Keep examples ROS-agnostic:
+  - [x] no hardcoded ROS paths in code; environment setup is documented only.
+- [x] If `BehaviorTree.PY` ships ROS metadata, add a colcon-based “happy path” for examples:
+  - [x] workspace layout + commands to build/install behaviortree_py via colcon
+  - [x] confirm examples run against the workspace overlay
 
 ## Smoke tests (must-have)
 - [ ] Stage 0 command set (copy/paste):
@@ -41,17 +41,18 @@ Current status:
   - [x] Conversion failures raise. (covered by `../tests/test_stage3_ports_and_blackboard.py`)
   - [ ] Conversion failures include actionable messages (port name, expected type, and why the value was treated as JSON).
 - [ ] GIL policy:
-  - [ ] Confirm other Python threads run while `tree.tick_*()` is executing (GIL released in C++ sections).
+  - [x] Confirm other Python threads run while `tree.tick_*()` is executing (GIL released in C++ sections).
   - [ ] Confirm Python overrides are called with GIL held.
 - [ ] Thread-safety scope:
-  - [ ] Initial: only tick from the creating/main Python thread (documented).
+  - [x] Initial: only tick from the creating/main Python thread (enforced + tested).
+  - [ ] Documented.
   - [ ] (Deferred) multi-thread ticking support as an optional feature, with dedicated stress tests.
 - [ ] Lifetime/ownership:
   - [ ] Confirm Python node instances remain alive while the tree exists (strong refs held by wrappers).
   - [ ] Confirm teardown releases Python references deterministically (no leaks in repeated create/destroy cycles).
 - [ ] Error propagation:
-  - [ ] Python exceptions inside node overrides abort ticking and propagate to caller (BT.CPP-aligned).
-  - [ ] Exception messages include node path/name and the phase where it occurred.
+  - [x] Python exceptions inside node overrides abort ticking and propagate to caller (BT.CPP-aligned).
+  - [x] Exception messages include node path/name and the phase where it occurred.
 - [ ] Run the smoke suite across targets:
   - [ ] ROS: humble, jazzy, kilted, rolling (separate environments/containers)
 
@@ -62,7 +63,7 @@ Current status:
   - [x] Stage 3: typed primitives/lists + JSON lane + strict error examples. (covered by `../tests/test_stage3_ports_and_blackboard.py`)
   - [x] Stage 4: plugin-based examples (`registerFromPlugin`) and file-based trees. (covered by `../tests/test_stage4_create_from_file.py` + `../tests/test_stage4_plugin_loading.py`)
   - [x] Stage 5a: JSON import/export helpers. (covered by `../tests/test_stage5_json_export_import.py`)
-  - [ ] Stage 5b: introspection examples (requires `TreeNode` wrappers / `Tree.rootNode` bindings).
+  - [x] Stage 5b: introspection examples (requires `TreeNode` wrappers / `Tree.rootNode` bindings).
   - [ ] Stage 6: logger integration examples (feature-gated by installed deps).
 - [x] Factory registration of Python action nodes (sync). (covered by `../tests/test_stage2_python_nodes.py`)
 - [x] Stateful action nodes (start/running/halt). (covered by `../tests/test_stage2_python_nodes.py`)
@@ -74,14 +75,16 @@ Current status:
   - [x] Demonstrate `@classmethod provided_ports()` on Python subclasses. (covered by `../tests/test_stage2_python_nodes.py`)
   - [ ] Demonstrate validation failures and error messages for malformed port specs.
 
-- [ ] Add runnable cookbook scripts under `examples/` (not just pytest):
-  - [ ] `stage1_minimal_tick.py` (built-in nodes only).
-  - [ ] `stage2_sync_action.py` (Python `SyncActionNode` subclass + ports).
-  - [ ] `stage2_stateful_action.py` (Python `StatefulActionNode` lifecycle + halting).
-  - [ ] `stage3_value_contract.py` (typed primitives/lists + JSON lane + failure cases).
-  - [ ] `stage4_create_from_file.py` (+ sample XML under `examples/trees/`).
-  - [ ] `stage4_plugin_loading.py` (+ small plugin project under `examples/plugins/`).
-  - [ ] `stage5_json_roundtrip.py` (tree + blackboard export/import).
+- [x] Add runnable cookbook scripts under `examples/` (not just pytest):
+  - [x] `stage1_minimal_tick.py` (built-in nodes only).
+  - [x] `stage2_sync_action.py` (Python `SyncActionNode` subclass + ports).
+  - [x] `stage2_stateful_action.py` (Python `StatefulActionNode` lifecycle + halting).
+  - [x] `stage2_condition_node.py` (Python `ConditionNode` subclass).
+  - [x] `stage3_value_contract.py` (typed primitives/lists + JSON lane + failure cases).
+  - [x] `stage4_create_from_file.py` (+ sample XML under `examples/trees/`).
+  - [x] `stage4_plugin_loading.py` (builds a small plugin at runtime via CMake).
+  - [x] `stage5_json_roundtrip.py` (tree + blackboard export/import).
+  - [x] `stage5_introspection.py` (TreeNode wrappers).
 
 ## Data interchange examples
 - [x] Primitive ports: bool/int/double/string. (covered by `../tests/test_stage3_ports_and_blackboard.py`)
@@ -121,7 +124,7 @@ Current status:
   - [ ] expected output
   - [ ] troubleshooting section
 - [ ] Add `examples/README.md` that:
-  - [ ] Links to `../tests/` for regression coverage.
-  - [ ] Provides a copy/paste “run examples” flow against the workspace overlay.
+  - [x] Links to `../tests/` for regression coverage.
+  - [x] Provides a copy/paste “run examples” flow against the workspace overlay.
 - [ ] Add a “matrix” mapping example → feature(s) covered.
 - [ ] Add a “platform matrix” mapping example → which environments it was validated on (ROS distros).
