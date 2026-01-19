@@ -31,3 +31,12 @@ This file tracks decisions, surprises, and any blocked items encountered while i
 
 ### Stage 4 plugins (test strategy)
 - **Decision**: Add a pytest integration test that compiles a tiny BT.CPP plugin (`BT_REGISTER_NODES`) into a temp dir and loads it via `BehaviorTreeFactory.register_from_plugin()`.
+
+## 2026-01-19
+
+### Testing (pytest + ROS env)
+- **Issue**: Running the full test suite with `pytest` in a ROS (jazzy) environment intermittently crashed (SIGSEGV) due to auto-loaded `launch_testing*` pytest plugins, which are not needed for this project’s unit tests.
+- **Workaround (decision)**: Run tests with ROS plugins disabled explicitly:
+  - `python3 -m pytest -q -p no:launch_testing -p no:launch_ros -p no:launch_pytest <tests...>`
+  - or `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q <tests...>`
+  - A small wrapper script is provided at `scripts/run_tests.sh`.
