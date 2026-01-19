@@ -5,8 +5,11 @@ from ._version import __version__
 from ._core import (
     Blackboard,
     BehaviorTreeFactory,
+    NodeType,
     NodeStatus,
+    PortDirection,
     Tree,
+    TreeNode,
     btcpp_version_number,
     btcpp_version_string,
 )
@@ -62,10 +65,13 @@ __all__ = [
     "Blackboard",
     "BehaviorTreeFactory",
     "ConditionNode",
+    "NodeType",
     "NodeStatus",
+    "PortDirection",
     "StatefulActionNode",
     "SyncActionNode",
     "Tree",
+    "TreeNode",
     "btcpp_version_number",
     "btcpp_version_string",
 ]

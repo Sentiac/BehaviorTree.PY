@@ -51,3 +51,10 @@ This file tracks decisions, surprises, and any blocked items encountered while i
 
 ### Condition nodes
 - **Decision**: Provide Python `ConditionNode` subclassing support (BT.CPP `NodeType::CONDITION`) using the same `_bt` handle + `provided_ports()` contract as action nodes.
+
+### Introspection (TreeNode)
+- **Added**: Read-only introspection bindings:
+  - `Tree.root_node`, `Tree.nodes()`, `Tree.get_nodes_by_path()`, `Tree.apply_visitor()`
+  - `TreeNode` properties: `name`, `full_path`, `registration_name`, `uid`, `status`, `type`, `ports`, `blackboard`, `input_ports`, `output_ports`
+  - `TreeNode.children()` for Control/Decorator nodes
+- **Bugfix**: `Tree.from_json()` previously used a temporary `py::str` stored as `py::handle`, causing a dangling reference and a potential segfault under repeated calls. Fixed by owning the key as `py::str`.

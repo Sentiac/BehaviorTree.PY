@@ -15,6 +15,8 @@
 #include <behaviortree_cpp/behavior_tree.h>
 #include <behaviortree_cpp/bt_factory.h>
 #include <behaviortree_cpp/condition_node.h>
+#include <behaviortree_cpp/control_node.h>
+#include <behaviortree_cpp/decorator_node.h>
 #include <behaviortree_cpp/json_export.h>
 #include <behaviortree_cpp/utils/demangle_util.h>
 
@@ -882,6 +884,112 @@ PYBIND11_MODULE(_core, m)
       .value("SKIPPED", BT::NodeStatus::SKIPPED)
       .export_values();
 
+  py::enum_<BT::NodeType>(m, "NodeType")
+      .value("UNDEFINED", BT::NodeType::UNDEFINED)
+      .value("ACTION", BT::NodeType::ACTION)
+      .value("CONDITION", BT::NodeType::CONDITION)
+      .value("CONTROL", BT::NodeType::CONTROL)
+      .value("DECORATOR", BT::NodeType::DECORATOR)
+      .value("SUBTREE", BT::NodeType::SUBTREE)
+      .export_values();
+
+  py::enum_<BT::PortDirection>(m, "PortDirection")
+      .value("INPUT", BT::PortDirection::INPUT)
+      .value("OUTPUT", BT::PortDirection::OUTPUT)
+      .value("INOUT", BT::PortDirection::INOUT)
+      .export_values();
+
+  py::class_<BT::TreeNode>(m, "TreeNode")
+      .def_property_readonly("uid", &BT::TreeNode::UID)
+      .def_property_readonly("name", [](const BT::TreeNode& node) { return node.name(); })
+      .def_property_readonly("full_path",
+                             [](const BT::TreeNode& node) { return node.fullPath(); })
+      .def_property_readonly(
+          "registration_name",
+          [](const BT::TreeNode& node) { return node.registrationName(); },
+          "Factory registration ID for this node instance.")
+      .def_property_readonly("status", &BT::TreeNode::status)
+      .def_property_readonly("type", &BT::TreeNode::type)
+      .def_property_readonly(
+          "blackboard",
+          [](const BT::TreeNode& node) { return node.config().blackboard; },
+          "Blackboard associated with this node (usually the subtree blackboard).")
+      .def_property_readonly("input_ports",
+                             [](const BT::TreeNode& node) {
+                               py::dict out;
+                               for (const auto& kv : node.config().input_ports)
+                               {
+                                 out[py::str(kv.first)] = py::str(kv.second);
+                               }
+                               return out;
+                             })
+      .def_property_readonly("output_ports",
+                             [](const BT::TreeNode& node) {
+                               py::dict out;
+                               for (const auto& kv : node.config().output_ports)
+                               {
+                                 out[py::str(kv.first)] = py::str(kv.second);
+                               }
+                               return out;
+                             })
+      .def_property_readonly(
+          "ports",
+          [](const BT::TreeNode& node) {
+            py::dict out;
+            const auto* manifest = node.config().manifest;
+            if (!manifest)
+            {
+              return out;
+            }
+
+            for (const auto& kv : manifest->ports)
+            {
+              const std::string& port_name = kv.first;
+              const BT::PortInfo& info = kv.second;
+
+              py::dict port;
+              port[py::str("direction")] = info.direction();
+              port[py::str("type")] = py::str(info.typeName());
+              port[py::str("is_strongly_typed")] = py::bool_(info.isStronglyTyped());
+              if (!info.description().empty())
+              {
+                port[py::str("description")] = py::str(info.description());
+              }
+              if (!info.defaultValueString().empty())
+              {
+                port[py::str("default_value")] = py::str(info.defaultValueString());
+              }
+
+              out[py::str(port_name)] = port;
+            }
+            return out;
+          },
+          "Ports declared for this node (from its manifest).")
+      .def(
+          "children",
+          [](const py::object& self) {
+            const auto* node = self.cast<const BT::TreeNode*>();
+
+            py::list out;
+            if (auto control = dynamic_cast<const BT::ControlNode*>(node))
+            {
+              for (const auto* child : control->children())
+              {
+                out.append(py::cast(child, py::return_value_policy::reference_internal, self));
+              }
+            }
+            else if (auto decorator = dynamic_cast<const BT::DecoratorNode*>(node))
+            {
+              if (const auto* child = decorator->child())
+              {
+                out.append(py::cast(child, py::return_value_policy::reference_internal, self));
+              }
+            }
+
+            return out;
+          },
+          "Return child nodes (ControlNode children or DecoratorNode child).");
+
   py::class_<NodeHandle>(m, "_NodeHandle")
       .def("get_input", &NodeHandle::get_input, py::arg("key"))
       .def("set_output", &NodeHandle::set_output, py::arg("key"), py::arg("value"))
@@ -946,6 +1054,66 @@ PYBIND11_MODULE(_core, m)
           "Import using BT.CPP JsonExporter (requires BT.CPP-supported JSON formats).");
 
   py::class_<PyTree>(m, "Tree")
+      .def_property_readonly(
+          "root_node",
+          [](const py::object& self) -> py::object {
+            const BT::Tree& tree = self.cast<const PyTree&>().tree();
+            if (auto* root = tree.rootNode())
+            {
+              return py::cast(root, py::return_value_policy::reference_internal, self);
+            }
+            return py::none();
+          },
+          "Return the root TreeNode (or None).")
+      .def(
+          "nodes",
+          [](const py::object& self) {
+            const BT::Tree& tree = self.cast<const PyTree&>().tree();
+            py::list out;
+            for (const auto& subtree : tree.subtrees)
+            {
+              for (const auto& node : subtree->nodes)
+              {
+                out.append(py::cast(node.get(), py::return_value_policy::reference_internal, self));
+              }
+            }
+            return out;
+          },
+          "Return all nodes in the tree.")
+      .def(
+          "get_nodes_by_path",
+          [](const py::object& self, const std::string& wildcard_filter) {
+            const BT::Tree& tree = self.cast<const PyTree&>().tree();
+            py::list out;
+            for (const auto& subtree : tree.subtrees)
+            {
+              for (const auto& node : subtree->nodes)
+              {
+                if (BT::WildcardMatch(node->fullPath(), wildcard_filter))
+                {
+                  out.append(
+                      py::cast(node.get(), py::return_value_policy::reference_internal, self));
+                }
+              }
+            }
+            return out;
+          },
+          py::arg("wildcard_filter"),
+          "Return nodes whose full_path matches the wildcard filter.")
+      .def(
+          "apply_visitor",
+          [](const py::object& self, const py::function& visitor) {
+            const BT::Tree& tree = self.cast<const PyTree&>().tree();
+            for (const auto& subtree : tree.subtrees)
+            {
+              for (const auto& node : subtree->nodes)
+              {
+                visitor(py::cast(node.get(), py::return_value_policy::reference_internal, self));
+              }
+            }
+          },
+          py::arg("visitor"),
+          "Call visitor(TreeNode) for each node in the tree.")
       .def(
           "tick_once",
           [](PyTree& self) {
