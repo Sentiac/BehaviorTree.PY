@@ -8,6 +8,7 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_dir="$(cd "${script_dir}/.." && pwd)"
 ws_dir="$(cd "${repo_dir}/../.." && pwd)"
+orig_cwd="$(pwd)"
 
 ros_distro="${ROS_DISTRO:-jazzy}"
 if [[ -f "/opt/ros/${ros_distro}/setup.bash" ]]; then
@@ -27,11 +28,30 @@ fi
 args=("$@")
 if [[ ${#args[@]} -eq 0 ]]; then
   args=("${repo_dir}/tests")
+else
+  resolved_args=()
+  for arg in "${args[@]}"; do
+    if [[ "${arg}" == -* ]]; then
+      resolved_args+=("${arg}")
+    elif [[ "${arg}" = /* ]]; then
+      resolved_args+=("${arg}")
+    elif [[ -e "${orig_cwd}/${arg}" ]]; then
+      resolved_args+=("${orig_cwd}/${arg}")
+    elif [[ -e "${repo_dir}/${arg}" ]]; then
+      resolved_args+=("${repo_dir}/${arg}")
+    else
+      resolved_args+=("${arg}")
+    fi
+  done
+  args=("${resolved_args[@]}")
 fi
 
 export PYTEST_DISABLE_PLUGIN_AUTOLOAD="${PYTEST_DISABLE_PLUGIN_AUTOLOAD:-1}"
 
+cd "${ws_dir}"
+
 exec python3 -m pytest -q \
+  --rootdir "${ws_dir}" \
   -p no:launch_testing \
   -p no:launch_ros \
   -p no:launch_pytest \

@@ -40,6 +40,8 @@ This file tracks decisions, surprises, and any blocked items encountered while i
   - `python3 -m pytest -q -p no:launch_testing -p no:launch_ros -p no:launch_pytest <tests...>`
   - or `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q <tests...>`
   - A small wrapper script is provided at `scripts/run_tests.sh`.
+- **Issue**: Running the test suite from inside the source tree (`ros2_ws/src/BehaviorTree.PY`) can accidentally import the *source* `behaviortree_py/` package (which does not contain the compiled `_core`), causing `ModuleNotFoundError: behaviortree_py._core`.
+- **Fix**: `scripts/run_tests.sh` now forces a safe pytest rootdir and runs from the workspace directory so imports resolve to the overlay-installed package.
 
 ### Threading + exception context
 - **Decision**: Fail fast when calling `Tree.tick_*()` and `Tree.halt_tree()` from any thread other than the one that created the `Tree`.
