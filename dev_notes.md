@@ -94,3 +94,12 @@ This file tracks decisions, surprises, and any blocked items encountered while i
   - `StdCoutLogger`
   - `FileLogger2`
   - `MinitraceLogger`
+
+### Substitution rules (factory)
+- **Added**: bindings for BT.CPP substitution rules:
+  - `BehaviorTreeFactory.clear_substitution_rules()`
+  - `BehaviorTreeFactory.add_substitution_rule(filter, rule)` where `rule` is either a node type string or a `TestNodeConfig` dict
+  - `BehaviorTreeFactory.load_substitution_rules_from_json(json_text)`
+  - `BehaviorTreeFactory.substitution_rules()`
+- **TestNodeConfig dict keys**: `return_status`, `async_delay_ms` (also accepts BT.CPP-style `async_delay`), `success_script`, `failure_script`, `post_script`.
+- **Design choice**: `TestNodeConfig.complete_func` is intentionally not supported from Python because it requires storing a `std::function` with tricky lifetime/capture semantics across the language boundary.

@@ -13,6 +13,7 @@
 #include <pybind11/pytypes.h>
 
 #include <behaviortree_cpp/action_node.h>
+#include <behaviortree_cpp/actions/test_node.h>
 #include <behaviortree_cpp/basic_types.h>
 #include <behaviortree_cpp/blackboard.h>
 #include <behaviortree_cpp/behavior_tree.h>
@@ -233,6 +234,132 @@ const char* json_value_type_name(nlohmann::json::value_t type)
   default:
     return "unknown";
   }
+}
+
+int64_t py_int_to_int64(const py::handle& obj);
+
+std::shared_ptr<BT::TestNodeConfig> test_node_config_from_py(const py::handle& obj)
+{
+  if (obj.is_none())
+  {
+    throw py::type_error("TestNodeConfig cannot be None");
+  }
+  if (!py::isinstance<py::dict>(obj))
+  {
+    throw py::type_error(std::string("TestNodeConfig must be a dict (got ") + py_type_name(obj)
+                         + ")");
+  }
+
+  const py::dict dict = py::reinterpret_borrow<py::dict>(obj);
+  auto cfg = std::make_shared<BT::TestNodeConfig>();
+
+  if (dict.contains("return_status") && !dict["return_status"].is_none())
+  {
+    const py::handle v = dict["return_status"];
+    if (py::isinstance<BT::NodeStatus>(v))
+    {
+      cfg->return_status = py::cast<BT::NodeStatus>(v);
+    }
+    else if (py::isinstance<py::str>(v))
+    {
+      const std::string s = py::cast<std::string>(v);
+      if (s == "SUCCESS")
+      {
+        cfg->return_status = BT::NodeStatus::SUCCESS;
+      }
+      else if (s == "FAILURE")
+      {
+        cfg->return_status = BT::NodeStatus::FAILURE;
+      }
+      else if (s == "RUNNING")
+      {
+        cfg->return_status = BT::NodeStatus::RUNNING;
+      }
+      else if (s == "SKIPPED")
+      {
+        cfg->return_status = BT::NodeStatus::SKIPPED;
+      }
+      else if (s == "IDLE")
+      {
+        cfg->return_status = BT::NodeStatus::IDLE;
+      }
+      else
+      {
+        throw py::value_error("Invalid return_status string: " + s);
+      }
+    }
+    else
+    {
+      throw py::type_error("return_status must be a NodeStatus or string");
+    }
+  }
+
+  const bool has_async_delay = dict.contains("async_delay") && !dict["async_delay"].is_none();
+  const bool has_async_delay_ms =
+      dict.contains("async_delay_ms") && !dict["async_delay_ms"].is_none();
+  if (has_async_delay && has_async_delay_ms)
+  {
+    throw py::value_error("Specify only one of async_delay or async_delay_ms");
+  }
+  if (has_async_delay || has_async_delay_ms)
+  {
+    const py::handle v = has_async_delay ? dict["async_delay"] : dict["async_delay_ms"];
+    if (!py::isinstance<py::int_>(v) || py::isinstance<py::bool_>(v))
+    {
+      throw py::type_error("async_delay/async_delay_ms must be an int (milliseconds)");
+    }
+    const int64_t ms = py_int_to_int64(v);
+    if (ms < 0)
+    {
+      throw py::value_error("async_delay/async_delay_ms must be >= 0");
+    }
+    cfg->async_delay = std::chrono::milliseconds(ms);
+  }
+
+  auto set_script = [&](const char* key, std::string& out) {
+    if (!dict.contains(key) || dict[key].is_none())
+    {
+      return;
+    }
+    const py::handle v = dict[key];
+    if (!py::isinstance<py::str>(v))
+    {
+      throw py::type_error(std::string(key) + " must be a string");
+    }
+    out = py::cast<std::string>(v);
+  };
+
+  set_script("success_script", cfg->success_script);
+  set_script("failure_script", cfg->failure_script);
+  set_script("post_script", cfg->post_script);
+
+  if (dict.contains("complete_func") && !dict["complete_func"].is_none())
+  {
+    throw py::type_error(
+        "TestNodeConfig.complete_func is not supported from Python (provide return_status/scripts instead)");
+  }
+
+  return cfg;
+}
+
+py::dict test_node_config_to_py(const BT::TestNodeConfig& cfg)
+{
+  py::dict out;
+  out["return_status"] = py::cast(cfg.return_status);
+  out["async_delay_ms"] = py::int_(cfg.async_delay.count());
+  if (!cfg.success_script.empty())
+  {
+    out["success_script"] = py::str(cfg.success_script);
+  }
+  if (!cfg.failure_script.empty())
+  {
+    out["failure_script"] = py::str(cfg.failure_script);
+  }
+  if (!cfg.post_script.empty())
+  {
+    out["post_script"] = py::str(cfg.post_script);
+  }
+  return out;
 }
 
 int64_t py_int_to_int64(const py::handle& obj)
@@ -2288,7 +2415,73 @@ PYBIND11_MODULE(_core, m)
             return PyTree(factory.createTree(tree_name));
           },
           py::arg("tree_name"),
-          "Instantiate a previously-registered BehaviorTree by ID.");
+          "Instantiate a previously-registered BehaviorTree by ID.")
+      .def("clear_substitution_rules",
+           &BT::BehaviorTreeFactory::clearSubstitutionRules,
+           "Clear any previously-configured substitution rules.")
+      .def(
+          "add_substitution_rule",
+          [](BT::BehaviorTreeFactory& factory, const std::string& filter,
+             const py::object& rule) {
+            if (py::isinstance<py::str>(rule))
+            {
+              factory.addSubstitutionRule(filter, py::cast<std::string>(rule));
+              return;
+            }
+            if (py::isinstance<py::dict>(rule))
+            {
+              factory.addSubstitutionRule(filter, test_node_config_from_py(rule));
+              return;
+            }
+            throw py::type_error("rule must be a string or a dict (TestNodeConfig)");
+          },
+          py::arg("filter"),
+          py::arg("rule"),
+          "Add a substitution rule.\n\n"
+          "If rule is a string, matching nodes are replaced with a different node type.\n"
+          "If rule is a dict, it is interpreted as a TestNodeConfig and a TestNode is created instead.\n"
+          "The filter matches on node fullPath(); wildcard matching is supported.")
+      .def("load_substitution_rules_from_json",
+           &BT::BehaviorTreeFactory::loadSubstitutionRuleFromJSON,
+           py::arg("json_text"),
+           "Load substitution rules from a JSON text (see BT.CPP tutorial 15).")
+      .def(
+          "substitution_rules",
+          [](const BT::BehaviorTreeFactory& factory) {
+            py::dict out;
+            for (const auto& [filter, rule] : factory.substitutionRules())
+            {
+              const auto* as_str = std::get_if<std::string>(&rule);
+              if (as_str)
+              {
+                out[py::str(filter)] = py::str(*as_str);
+                continue;
+              }
+              const auto* as_cfg = std::get_if<BT::TestNodeConfig>(&rule);
+              if (as_cfg)
+              {
+                out[py::str(filter)] = test_node_config_to_py(*as_cfg);
+                continue;
+              }
+              const auto* as_cfg_ptr = std::get_if<std::shared_ptr<BT::TestNodeConfig>>(&rule);
+              if (as_cfg_ptr)
+              {
+                if (!*as_cfg_ptr)
+                {
+                  out[py::str(filter)] = py::none();
+                }
+                else
+                {
+                  out[py::str(filter)] = test_node_config_to_py(**as_cfg_ptr);
+                }
+                continue;
+              }
+              out[py::str(filter)] = py::none();
+            }
+            return out;
+          },
+          "Return current substitution rules as a dict.\n\n"
+          "Each value is either a string (node type) or a dict (TestNodeConfig).");
 
 #ifdef BEHAVIORTREE_PY_VERSION
   m.attr("__behaviortree_py_version__") = py::str(BEHAVIORTREE_PY_VERSION);
