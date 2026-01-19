@@ -175,7 +175,7 @@ Expose read-only and utility APIs for debugging and tooling.
 
 ### Stage 6 — Logging integrations (optional, feature-gated)
 Bind logger classes in a way that gracefully degrades when deps are missing.
-- [ ] `StdCoutLogger`, `FileLogger2`, `MinitraceLogger`.
+- [x] `StdCoutLogger`, `FileLogger2`, `MinitraceLogger`.
 - [ ] `SqliteLogger` (requires sqlite).
 - [ ] `Groot2Publisher` (requires ZeroMQ).
 

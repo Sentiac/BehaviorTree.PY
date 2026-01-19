@@ -2,6 +2,7 @@
 #include <cctype>
 #include <cstdint>
 #include <algorithm>
+#include <filesystem>
 #include <limits>
 #include <string>
 #include <thread>
@@ -20,6 +21,9 @@
 #include <behaviortree_cpp/control_node.h>
 #include <behaviortree_cpp/decorator_node.h>
 #include <behaviortree_cpp/json_export.h>
+#include <behaviortree_cpp/loggers/bt_cout_logger.h>
+#include <behaviortree_cpp/loggers/bt_file_logger_v2.h>
+#include <behaviortree_cpp/loggers/bt_minitrace_logger.h>
 #include <behaviortree_cpp/utils/demangle_util.h>
 
 namespace py = pybind11;
@@ -1223,6 +1227,95 @@ private:
   std::thread::id created_on_thread_id_;
 };
 
+class PyStdCoutLogger
+{
+public:
+  explicit PyStdCoutLogger(py::object tree_obj) : tree_obj_(std::move(tree_obj))
+  {
+    const auto& tree = tree_obj_.cast<const PyTree&>().tree();
+    logger_ = std::make_unique<BT::StdCoutLogger>(tree);
+  }
+
+  ~PyStdCoutLogger()
+  {
+    if (!Py_IsInitialized())
+    {
+      return;
+    }
+    py::gil_scoped_acquire acquire;
+    tree_obj_ = py::none();
+  }
+
+  void flush()
+  {
+    logger_->flush();
+  }
+
+private:
+  py::object tree_obj_;
+  std::unique_ptr<BT::StdCoutLogger> logger_;
+};
+
+class PyFileLogger2
+{
+public:
+  PyFileLogger2(py::object tree_obj, const std::string& filepath) :
+    tree_obj_(std::move(tree_obj))
+  {
+    const auto& tree = tree_obj_.cast<const PyTree&>().tree();
+    logger_ = std::make_unique<BT::FileLogger2>(tree, std::filesystem::path(filepath));
+  }
+
+  ~PyFileLogger2()
+  {
+    if (!Py_IsInitialized())
+    {
+      return;
+    }
+    py::gil_scoped_acquire acquire;
+    tree_obj_ = py::none();
+  }
+
+  void flush()
+  {
+    logger_->flush();
+  }
+
+private:
+  py::object tree_obj_;
+  std::unique_ptr<BT::FileLogger2> logger_;
+};
+
+class PyMinitraceLogger
+{
+public:
+  PyMinitraceLogger(py::object tree_obj, const std::string& filename_json) :
+    tree_obj_(std::move(tree_obj))
+  {
+    const auto& tree = tree_obj_.cast<const PyTree&>().tree();
+    logger_ = std::make_unique<BT::MinitraceLogger>(tree, filename_json.c_str());
+  }
+
+  ~PyMinitraceLogger()
+  {
+    if (!Py_IsInitialized())
+    {
+      return;
+    }
+    py::gil_scoped_acquire acquire;
+    tree_obj_ = py::none();
+  }
+
+  void flush()
+  {
+    logger_->flush();
+  }
+
+private:
+  py::object tree_obj_;
+  std::unique_ptr<BT::MinitraceLogger> logger_;
+};
+
 class PySyncActionNode final : public BT::SyncActionNode
 {
 public:
@@ -2010,6 +2103,20 @@ PYBIND11_MODULE(_core, m)
             self.tree().haltTree();
           },
           "Halt execution of the tree.");
+
+  py::class_<PyStdCoutLogger>(m, "StdCoutLogger")
+      .def(py::init<py::object>(), py::arg("tree"))
+      .def("flush", &PyStdCoutLogger::flush);
+
+  py::class_<PyFileLogger2>(m, "FileLogger2")
+      .def(py::init<py::object, std::string>(), py::arg("tree"), py::arg("filepath"))
+      .def("flush", &PyFileLogger2::flush);
+
+  py::class_<PyMinitraceLogger>(m, "MinitraceLogger")
+      .def(py::init<py::object, std::string>(),
+           py::arg("tree"),
+           py::arg("filename_json"))
+      .def("flush", &PyMinitraceLogger::flush);
 
   py::class_<BT::BehaviorTreeFactory>(m, "BehaviorTreeFactory")
       .def(py::init<>())

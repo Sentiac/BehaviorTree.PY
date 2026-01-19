@@ -88,3 +88,9 @@ This file tracks decisions, surprises, and any blocked items encountered while i
 - **Enforcement**:
   - `set_output()` rejects JSON-lane values (`dict`, `None`) for non-JSON typed ports.
   - `get_input()` uses BT.CPP `getInput<T>` for strongly-typed ports (including conversion from string when available).
+
+### Logging bindings
+- **Added**: basic logger bindings that attach to a `Tree` and expose `flush()`:
+  - `StdCoutLogger`
+  - `FileLogger2`
+  - `MinitraceLogger`
