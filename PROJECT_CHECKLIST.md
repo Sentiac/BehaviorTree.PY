@@ -205,6 +205,22 @@ Additional doc tasks discovered:
 - [ ] Document substitution rules (mocking/TestNodeConfig) with a short example.
 - [ ] Document SqliteLogger/Groot2Publisher usage and caveats (ports, file suffix, dependencies).
 
+## BT.CPP examples parity (gap list)
+
+Add cookbook/scripts/bindings where feasible to mirror BT.CPP examples:
+- [ ] Subtrees + port remapping (`t06_subtree_port_remapping.cpp`) cookbook example.
+- [ ] Register multiple BehaviorTrees from one XML (`t07_load_multiple_xml.cpp`) cookbook example.
+- [ ] Subtree model / composition patterns (`t14_subtree_model.cpp`) cookbook example.
+- [ ] Scripting tutorial parity (`t09_scripting.cpp`):
+  - [ ] document what works with built-in `Script` node from XML
+  - [ ] document limitations around custom types + script-produced values.
+- [ ] Observer/monitor example parity (`t10_observer.cpp`) (decide API surface to expose, if any).
+- [ ] Global blackboard + clone/backup parity (`t16_global_blackboard.cpp`, `t17_blackboard_backup.cpp`):
+  - [ ] bind/decide support for `BlackboardClone` / `BlackboardBackup` utilities if needed.
+- [ ] Access-by-ref/custom type parity (`t13_access_by_ref.cpp`, `t18_waypoints.cpp`):
+  - [ ] document that Python intentionally avoids storing Python objects in the BT blackboard
+  - [ ] provide a “type plugin” pattern for custom C++ types (JSON converter + optional pybind module).
+
 ---
 
 ## Optional improvements (deferred)

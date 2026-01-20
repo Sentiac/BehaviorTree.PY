@@ -69,7 +69,10 @@ Current status:
 - [x] Factory registration of Python action nodes (sync). (covered by `../tests/test_stage2_python_nodes.py`)
 - [x] Stateful action nodes (start/running/halt). (covered by `../tests/test_stage2_python_nodes.py`)
 - [ ] Async/cooperative pattern (if supported) and cancellation semantics.
-- [ ] Subtrees, includes, and tree composition patterns.
+- [ ] Subtrees, includes, and tree composition patterns (BT.CPP parity):
+  - [ ] Subtree port remapping cookbook (mirror `t06_subtree_port_remapping.cpp`).
+  - [ ] Multiple trees in one XML + `register_behavior_tree_from_text` cookbook (mirror `t07_load_multiple_xml.cpp`).
+  - [ ] Subtree model / composition cookbook (mirror `t14_subtree_model.cpp`).
 - [ ] Plugins: loading and using shared-library nodes from system install (if applicable).
 - [ ] Logging / monitoring examples (as supported by BT.CPP install).
 - [ ] Ports declaration patterns:
@@ -96,6 +99,7 @@ Current status:
 - [x] List ports: `list[int]`, `list[float]`, `list[str]` (as supported). (covered by `../tests/test_stage3_ports_and_blackboard.py`)
 - [x] JSON fallback lane: dict/nested list structures with round-trip checks. (covered by `../tests/test_stage3_ports_and_blackboard.py`)
 - [ ] Explicit “payload/config port” convention examples (JSON values not intended to feed typed C++ ports).
+- [ ] Scripting node cookbook (mirror `t09_scripting.cpp`) and document limitations for non-primitive/custom types.
 - [x] Mixed-type JSON arrays should raise clear errors (documented limitation). (covered by `../tests/test_stage3_ports_and_blackboard.py`)
 - [ ] Pattern: replacing “mixed-type array” payloads with a custom struct:
   - [ ] Show a schema as a C++ struct with named fields (instead of heterogeneous arrays).
@@ -121,6 +125,9 @@ Current status:
   - [ ] registers JSON converters (or provides conversion glue) on import
 - [ ] Demonstrate passing/receiving this struct as a Python object in user code (with clear limitations).
 - [ ] Document build/install steps for the plugin and how it integrates with `behaviortree_py`.
+
+## BT.CPP examples parity (doable only in C++ / needs C++ plugin)
+- [ ] Access-by-ref/custom type examples (`t13_access_by_ref.cpp`, `t18_waypoints.cpp`) require C++ types and converters/plugins; add docs explaining the Python limitations and the “type plugin” solution path.
 
 ## Docs & UX
 - [ ] Each example has:
