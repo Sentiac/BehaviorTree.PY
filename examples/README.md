@@ -4,6 +4,8 @@ These scripts are a small “cookbook” for `behaviortree_py`.
 
 They are intended to be run against the **workspace overlay** build (not a system install).
 
+Requires Python `>= 3.10`.
+
 ## Prerequisites
 
 From the workspace root:
@@ -28,6 +30,7 @@ python3 ros2_ws/src/BehaviorTree.PY/examples/stage2_control_decorator_nodes.py
 python3 ros2_ws/src/BehaviorTree.PY/examples/stage3_value_contract.py
 python3 ros2_ws/src/BehaviorTree.PY/examples/stage3_typed_ports.py
 python3 ros2_ws/src/BehaviorTree.PY/examples/stage4_create_from_file.py
+python3 ros2_ws/src/BehaviorTree.PY/examples/stage4_substitution_rules.py
 python3 ros2_ws/src/BehaviorTree.PY/examples/stage4_plugin_loading.py
 python3 ros2_ws/src/BehaviorTree.PY/examples/stage5_json_roundtrip.py
 python3 ros2_ws/src/BehaviorTree.PY/examples/stage5_introspection.py

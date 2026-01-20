@@ -64,3 +64,27 @@ def test_repeat_create_tick_destroy_releases_python_node_instances() -> None:
     assert _LifetimeProbe.refs
     assert all(ref() is None for ref in _LifetimeProbe.refs)
 
+
+def test_python_node_instances_stay_alive_while_tree_exists() -> None:
+    _LifetimeProbe.refs = []
+
+    factory = bt.BehaviorTreeFactory()
+    factory.register_sync_action(_LifetimeProbe)
+
+    tree = factory.create_tree_from_text(
+        """
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <_LifetimeProbe/>
+  </BehaviorTree>
+</root>
+""".strip()
+    )
+    assert tree.tick_once() == bt.NodeStatus.SUCCESS
+
+    assert _LifetimeProbe.refs
+    assert any(ref() is not None for ref in _LifetimeProbe.refs)
+
+    del tree
+    gc.collect()
+    assert all(ref() is None for ref in _LifetimeProbe.refs)

@@ -19,7 +19,7 @@ Current status:
   - [ ] or monorepo-style workspace instructions
 - [ ] Document prerequisites:
   - [x] Workspace is built and sourced (see repo root `README.md`).
-  - [ ] Python version(s)
+  - [x] Python version(s) (requires `>= 3.10`)
   - [x] compiler toolchain (only for custom-type plugin examples)
 - [x] Keep examples ROS-agnostic:
   - [x] no hardcoded ROS paths in code; environment setup is documented only.
@@ -29,8 +29,8 @@ Current status:
 
 ## Smoke tests (must-have)
 - [ ] Stage 0 command set (copy/paste):
-  - [ ] `cd ../../.. && cd ros2_ws && source /opt/ros/<distro>/setup.bash && colcon build --symlink-install && source install/setup.bash`
-  - [ ] `python3 -c "import behaviortree_py; print(behaviortree_py.btcpp_version_string())"`
+  - [x] `cd ../../.. && cd ros2_ws && source /opt/ros/<distro>/setup.bash && colcon build --symlink-install && source install/setup.bash`
+  - [x] `python3 -c "import behaviortree_py; print(behaviortree_py.btcpp_version_string())"`
 - [x] Import test: `import behaviortree_py` and confirm it can locate `libbehaviortree_cpp.so`. (covered by `../tests/test_stage1_smoke.py`)
 - [ ] Verify version compatibility checks:
   - [ ] Default requires same `MAJOR.MINOR` and warns on `PATCH` mismatch.
@@ -43,13 +43,13 @@ Current status:
   - [x] Errors include node/port context and list indices/types where applicable.
 - [ ] GIL policy:
   - [x] Confirm other Python threads run while `tree.tick_*()` is executing (GIL released in C++ sections).
-  - [ ] Confirm Python overrides are called with GIL held.
+  - [x] Confirm Python overrides are called with GIL held. (documented)
 - [ ] Thread-safety scope:
   - [x] Initial: only tick from the creating/main Python thread (enforced + tested).
-  - [ ] Documented.
+  - [x] Documented.
   - [ ] (Deferred) multi-thread ticking support as an optional feature, with dedicated stress tests.
 - [ ] Lifetime/ownership:
-  - [ ] Confirm Python node instances remain alive while the tree exists (strong refs held by wrappers).
+  - [x] Confirm Python node instances remain alive while the tree exists (strong refs held by wrappers). (covered by `../tests/test_stage7_stress.py`)
   - [x] Confirm teardown releases Python references deterministically (no leaks in repeated create/destroy cycles). (covered by `../tests/test_stage7_stress.py`)
 - [ ] Error propagation:
   - [x] Python exceptions inside node overrides abort ticking and propagate to caller (BT.CPP-aligned).
@@ -83,6 +83,7 @@ Current status:
   - [x] `stage2_condition_node.py` (Python `ConditionNode` subclass).
   - [x] `stage3_value_contract.py` (typed primitives/lists + JSON lane + failure cases).
   - [x] `stage4_create_from_file.py` (+ sample XML under `examples/trees/`).
+  - [x] `stage4_substitution_rules.py` (substitution rules + TestNodeConfig mocking).
   - [x] `stage4_plugin_loading.py` (builds a small plugin at runtime via CMake).
   - [x] `stage5_json_roundtrip.py` (tree + blackboard export/import).
   - [x] `stage5_introspection.py` (TreeNode wrappers).

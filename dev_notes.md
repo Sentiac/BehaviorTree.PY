@@ -114,3 +114,7 @@ This file tracks decisions, surprises, and any blocked items encountered while i
   `CMAKE_PREFIX_PATH`, pure pip builds cannot configure against that BT.CPP install.
 - **Mitigation**: `scripts/pip_install_smoke.sh` sources `/opt/ros/$ROS_DISTRO/setup.bash` when available before running
   the pip build.
+
+### CI
+- **Added**: GitHub Actions workflow that builds BT.CPP from source (matching `pyproject.toml` version) and runs
+  `pip install .` + `./scripts/run_tests.sh` in ROS containers.

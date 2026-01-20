@@ -1,0 +1,67 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pip-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ros_distro: [humble, jazzy, rolling]
+    container:
+      image: ros:${{ matrix.ros_distro }}-ros-base
+    steps:
+      - name: Install system deps
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            cmake \
+            git \
+            python3-pip \
+            python3-venv \
+            libsqlite3-dev \
+            libzmq3-dev
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and install BehaviorTree.CPP
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+
+          BTPY_VER="$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+
+          git clone --depth 1 --branch "${BTPY_VER}" https://github.com/BehaviorTree/BehaviorTree.CPP.git btcpp
+
+          cmake -S btcpp -B btcpp/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${PWD}/btcpp/install"
+          cmake --build btcpp/build -- -j2
+          cmake --install btcpp/build
+
+          echo "CMAKE_PREFIX_PATH=${PWD}/btcpp/install" >> "$GITHUB_ENV"
+
+      - name: pip install and run tests
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+
+          python3 -m venv .venv
+          source .venv/bin/activate
+          python -m pip install -U pip
+
+          python -m pip install -U scikit-build-core pybind11 cmake ninja pytest
+          python -m pip install -v --no-build-isolation .
+
+          ./scripts/run_tests.sh
+

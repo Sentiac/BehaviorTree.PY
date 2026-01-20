@@ -42,8 +42,8 @@ Non-goals:
   - [x] JSON lane (everything else treated as JSON payload):
     - [x] `dict` / nested lists / mixed-type containers, etc.
 - [ ] Document the recommended pattern:
-  - [ ] Use typed values for ports that connect to C++ nodes.
-  - [ ] Use an explicit “payload/config” port convention for JSON objects (Python-first wiring / JSON-aware nodes).
+  - [x] Use typed values for ports that connect to C++ nodes.
+  - [x] Use an explicit “payload/config” port convention for JSON objects (Python-first wiring / JSON-aware nodes).
 - [x] Define conversion rules precisely:
   - [x] Numeric mapping rules (Python `int`→`int64`, Python `float`→`double`, JSON number handling).
   - [x] Dict key restrictions (JSON requires string keys).
@@ -75,7 +75,7 @@ Non-goals:
   - [x] Acquire the GIL only when invoking Python overrides (`tick`, `on_start`, `on_running`, `on_halted`) and other Python callbacks.
   - [x] Thread-safety scope (initial): ticking supported only from the creating/main Python thread.
   - [x] Fail fast if called from unexpected threads (where feasible).
-  - [ ] Document the contract clearly.
+  - [x] Document the contract clearly.
 - [x] Lifetime/ownership (decision):
   - [x] C++ node wrappers hold strong references to Python instances for the lifetime of the tree/node.
   - [x] Destruction releases Python refs deterministically when the tree is destroyed/reset (with GIL held).
@@ -160,7 +160,7 @@ Prove interoperability with externally-built nodes and file-based trees.
 - [ ] Example trees using plugins and subtrees/includes (where supported by BT.CPP parser).
 - [x] Avoid assumptions about build artifact paths (plugin-load test compiles a plugin into a temp dir).
 - [ ] Document plugin workflow (how to build a BT.CPP plugin + load it from Python/ROS overlays).
-  - [ ] Document required `BT_PLUGIN_EXPORT` compile definition for plugin symbol export.
+  - [x] Document required `BT_PLUGIN_EXPORT` compile definition for plugin symbol export.
 
 ### Stage 5 — Introspection + JSON import/export utilities
 Expose read-only and utility APIs for debugging and tooling.
@@ -183,21 +183,27 @@ Bind logger classes in a way that gracefully degrades when deps are missing.
 ### Stage 7 — Packaging convenience (ROS + CI matrix)
 - [x] Provide ROS package metadata/build for convenience (ROS-agnostic core).
 - [ ] CI covers: humble/jazzy/kilted/rolling (at least smoke + Stage 2/3).
+  - [x] GitHub Actions covers: humble/jazzy/rolling.
+  - [ ] Add kilted when available/stable.
 
 ## Testing
 - [x] Add a minimal test suite that runs against the workspace BT.CPP build.
-- [ ] Add CI recipe (container or local instructions).
-- [ ] Add a pip-based smoke test job (`pip install .` against a system/workspace BT.CPP).
+- [x] Add CI recipe (GitHub Actions containers).
+- [x] Add a pip-based smoke test job (`pip install .` against a built BT.CPP).
 - [x] Add threading/GIL regression tests:
   - [x] `tree.tick_*()` releases the GIL (other Python threads continue making progress).
   - [x] Ticking from a non-creating/non-main Python thread fails fast with a clear error.
 - [x] Add stress tests for teardown/leaks (repeat create/tick/destroy loops).
 
 ## Documentation
-- [ ] Quickstart: install + run a minimal tree.
+- [x] Quickstart: install + run a minimal tree.
 - [ ] API reference mapping: BT.CPP concepts → Python equivalents.
 - [ ] “Interoperability” guide: mixing Python nodes and C++ nodes, data types, and troubleshooting.
 - [ ] Release notes template.
+
+Additional doc tasks discovered:
+- [ ] Document substitution rules (mocking/TestNodeConfig) with a short example.
+- [ ] Document SqliteLogger/Groot2Publisher usage and caveats (ports, file suffix, dependencies).
 
 ---
 
