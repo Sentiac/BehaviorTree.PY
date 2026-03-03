@@ -9,6 +9,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_dir="$(cd "${script_dir}/.." && pwd)"
 ws_dir="$(cd "${repo_dir}/../.." && pwd)"
 orig_cwd="$(pwd)"
+python_bin="$(command -v python3)"
 
 ros_distro="${ROS_DISTRO:-jazzy}"
 if [[ -f "/opt/ros/${ros_distro}/setup.bash" ]]; then
@@ -50,7 +51,7 @@ export PYTEST_DISABLE_PLUGIN_AUTOLOAD="${PYTEST_DISABLE_PLUGIN_AUTOLOAD:-1}"
 
 cd "${ws_dir}"
 
-exec python3 -m pytest -q \
+exec "${python_bin}" -m pytest -q \
   --rootdir "${ws_dir}" \
   -p no:launch_testing \
   -p no:launch_ros \

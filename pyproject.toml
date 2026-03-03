@@ -2,19 +2,47 @@
 requires = [
   "scikit-build-core>=0.9",
   "pybind11>=2.11",
-  "cmake>=3.16",
-  "ninja",
 ]
 build-backend = "scikit_build_core.build"
 
 [project]
 name = "behaviortree_py"
-version = "4.7.1"
+version = "4.8.3"
 description = "Python bindings for BehaviorTree.CPP"
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
+authors = [
+  { name = "Sentiac", email = "contact@sentiac.com" },
+]
+maintainers = [
+  { name = "Sentiac", email = "contact@sentiac.com" },
+]
+keywords = ["behavior-tree", "robotics", "automation", "ai", "btcpp", "python-bindings"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: BSD License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: C++",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/Sentiac/BehaviorTree.PY"
+Source = "https://github.com/Sentiac/BehaviorTree.PY"
+Issues = "https://github.com/Sentiac/BehaviorTree.PY/issues"
+Documentation = "https://github.com/Sentiac/BehaviorTree.PY#readme"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "scikit-build-core>=0.9", "pybind11>=2.11"]
 
 [tool.scikit-build]
-cmake.minimum-version = "3.16"
+cmake.version = ">=3.16"
 build.verbose = true
 wheel.packages = ["behaviortree_py"]

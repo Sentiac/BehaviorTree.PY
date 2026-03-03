@@ -2,6 +2,7 @@
 #include <cctype>
 #include <cstdint>
 #include <algorithm>
+#include <deque>
 #include <filesystem>
 #include <limits>
 #include <string>
@@ -21,6 +22,7 @@
 #include <behaviortree_cpp/condition_node.h>
 #include <behaviortree_cpp/control_node.h>
 #include <behaviortree_cpp/decorator_node.h>
+#include <behaviortree_cpp/decorators/loop_node.h>
 #include <behaviortree_cpp/json_export.h>
 #include <behaviortree_cpp/loggers/bt_cout_logger.h>
 #include <behaviortree_cpp/loggers/bt_file_logger_v2.h>
@@ -30,6 +32,43 @@
 #include <behaviortree_cpp/utils/demangle_util.h>
 
 namespace py = pybind11;
+
+namespace BT
+{
+struct PyPose2D
+{
+  double x = 0.0;
+  double y = 0.0;
+  double theta = 0.0;
+};
+
+template <>
+inline PyPose2D convertFromString<PyPose2D>(StringView str)
+{
+  auto parts = splitString(str, ';');
+  if (parts.size() != 3)
+  {
+    throw RuntimeError("invalid PyPose2D input");
+  }
+  PyPose2D out;
+  out.x = convertFromString<double>(parts[0]);
+  out.y = convertFromString<double>(parts[1]);
+  out.theta = convertFromString<double>(parts[2]);
+  return out;
+}
+
+template <>
+inline SharedQueue<PyPose2D> convertFromString<SharedQueue<PyPose2D>>(StringView str)
+{
+  SharedQueue<PyPose2D> out = std::make_shared<std::deque<PyPose2D>>();
+  auto elems = splitString(str, '|');
+  for (auto elem : elems)
+  {
+    out->push_back(convertFromString<PyPose2D>(elem));
+  }
+  return out;
+}
+}  // namespace BT
 
 namespace
 {
@@ -87,62 +126,106 @@ BT::PortsList extract_ports_list_or_throw(const py::type& type)
     return out;
   };
 
+  auto default_to_string = [](const py::handle& obj) -> std::string {
+    if (obj.is_none())
+    {
+      return "";
+    }
+    if (py::isinstance<py::str>(obj))
+    {
+      return py::cast<std::string>(obj);
+    }
+    if (py::isinstance<py::bool_>(obj))
+    {
+      return py::cast<bool>(obj) ? "true" : "false";
+    }
+    if (py::isinstance<py::int_>(obj) || py::isinstance<py::float_>(obj))
+    {
+      return py::cast<std::string>(py::str(obj));
+    }
+    throw py::type_error("Port spec 'default' must be str/bool/int/float when provided");
+  };
+
   auto insert_port = [&](BT::PortDirection direction, const std::string& name,
-                         const std::string& type_str) {
+                         const std::string& type_str, const std::string& default_value,
+                         const std::string& description) {
+    auto make_port = [&](auto tag) {
+      using PortT = decltype(tag);
+      if (default_value.empty())
+      {
+        ports.insert(BT::CreatePort<PortT>(direction, name, description));
+      }
+      else
+      {
+        ports.insert(
+            BT::details::PortWithDefault<PortT>(direction, name, default_value, description));
+      }
+    };
+
     const std::string t = normalize_type(type_str);
     if (t.empty() || t == "any")
     {
-      ports.insert(BT::CreatePort<BT::AnyTypeAllowed>(direction, name));
+      make_port(BT::AnyTypeAllowed {});
       return;
     }
     if (t == "bool")
     {
-      ports.insert(BT::CreatePort<bool>(direction, name));
+      make_port(bool {});
       return;
     }
     if (t == "int" || t == "int64")
     {
-      ports.insert(BT::CreatePort<int64_t>(direction, name));
+      make_port(int64_t {});
       return;
     }
     if (t == "float" || t == "double")
     {
-      ports.insert(BT::CreatePort<double>(direction, name));
+      make_port(double {});
       return;
     }
     if (t == "str" || t == "string")
     {
-      ports.insert(BT::CreatePort<std::string>(direction, name));
+      make_port(std::string {});
       return;
     }
     if (t == "list[bool]")
     {
-      ports.insert(BT::CreatePort<std::vector<bool>>(direction, name));
+      make_port(std::vector<bool> {});
       return;
     }
     if (t == "list[int]" || t == "list[int64]")
     {
-      ports.insert(BT::CreatePort<std::vector<int64_t>>(direction, name));
+      make_port(std::vector<int64_t> {});
       return;
     }
     if (t == "list[float]" || t == "list[double]")
     {
-      ports.insert(BT::CreatePort<std::vector<double>>(direction, name));
+      make_port(std::vector<double> {});
       return;
     }
     if (t == "list[str]" || t == "list[string]")
     {
-      ports.insert(BT::CreatePort<std::vector<std::string>>(direction, name));
+      make_port(std::vector<std::string> {});
       return;
     }
     if (t == "json")
     {
-      ports.insert(BT::CreatePort<nlohmann::json>(direction, name));
+      make_port(nlohmann::json {});
+      return;
+    }
+    if (t == "pose2d")
+    {
+      make_port(BT::PyPose2D {});
+      return;
+    }
+    if (t == "queue[pose2d]" || t == "shared_queue[pose2d]")
+    {
+      make_port(BT::SharedQueue<BT::PyPose2D> {});
       return;
     }
 
     throw py::value_error("Unsupported port type: '" + type_str
-                          + "' (supported: any, bool, int, float, str, json, list[...])");
+                          + "' (supported: any, bool, int, float, str, json, pose2d, queue[pose2d], list[...])");
   };
 
   auto add_ports = [&](BT::PortDirection direction, const char* key) {
@@ -150,7 +233,7 @@ BT::PortsList extract_ports_list_or_throw(const py::type& type)
     {
       if (py::isinstance<py::str>(item))
       {
-        insert_port(direction, py::cast<std::string>(item), "");
+        insert_port(direction, py::cast<std::string>(item), "", "", "");
         continue;
       }
       if (py::isinstance<py::dict>(item))
@@ -170,6 +253,8 @@ BT::PortsList extract_ports_list_or_throw(const py::type& type)
         const std::string name = py::cast<std::string>(name_obj);
 
         std::string type_str;
+        std::string default_value;
+        std::string description;
         if (spec.contains("type") && !spec["type"].is_none())
         {
           const py::handle type_obj = spec["type"];
@@ -180,8 +265,22 @@ BT::PortsList extract_ports_list_or_throw(const py::type& type)
           }
           type_str = py::cast<std::string>(type_obj);
         }
+        if (spec.contains("default") && !spec["default"].is_none())
+        {
+          default_value = default_to_string(spec["default"]);
+        }
+        if (spec.contains("description") && !spec["description"].is_none())
+        {
+          const py::handle desc_obj = spec["description"];
+          if (!py::isinstance<py::str>(desc_obj))
+          {
+            throw py::type_error(std::string("Port spec 'description' in provided_ports()['")
+                                 + key + "'] must be a string");
+          }
+          description = py::cast<std::string>(desc_obj);
+        }
 
-        insert_port(direction, name, type_str);
+        insert_port(direction, name, type_str, default_value, description);
         continue;
       }
 
@@ -499,6 +598,65 @@ py::object json_to_py(const nlohmann::json& json)
   }
 }
 
+BT::PyPose2D py_to_pose2d(const py::handle& obj)
+{
+  if (!py::isinstance<py::dict>(obj))
+  {
+    throw py::type_error("PyPose2D requires a dict with keys: x, y, theta");
+  }
+  const py::dict d = py::reinterpret_borrow<py::dict>(obj);
+  for (const char* key : {"x", "y", "theta"})
+  {
+    if (!d.contains(key))
+    {
+      throw py::key_error(std::string("PyPose2D is missing key: ") + key);
+    }
+  }
+  BT::PyPose2D out;
+  out.x = py::cast<double>(d["x"]);
+  out.y = py::cast<double>(d["y"]);
+  out.theta = py::cast<double>(d["theta"]);
+  return out;
+}
+
+py::object pose2d_to_py(const BT::PyPose2D& pose)
+{
+  py::dict out;
+  out[py::str("x")] = py::float_(pose.x);
+  out[py::str("y")] = py::float_(pose.y);
+  out[py::str("theta")] = py::float_(pose.theta);
+  return out;
+}
+
+BT::SharedQueue<BT::PyPose2D> py_to_pose2d_queue(const py::handle& obj)
+{
+  if (!py::isinstance<py::list>(obj) && !py::isinstance<py::tuple>(obj))
+  {
+    throw py::type_error("PyPose2D queue requires a list/tuple of pose dicts");
+  }
+  auto queue = std::make_shared<std::deque<BT::PyPose2D>>();
+  const py::sequence seq = py::reinterpret_borrow<py::sequence>(obj);
+  for (py::handle item : seq)
+  {
+    queue->push_back(py_to_pose2d(item));
+  }
+  return queue;
+}
+
+py::object pose2d_queue_to_py(const BT::SharedQueue<BT::PyPose2D>& queue)
+{
+  py::list out;
+  if (!queue)
+  {
+    return out;
+  }
+  for (const auto& pose : *queue)
+  {
+    out.append(pose2d_to_py(pose));
+  }
+  return out;
+}
+
 py::object any_to_py(const BT::Any& any)
 {
   if (any.empty())
@@ -562,6 +720,14 @@ py::object any_to_py(const BT::Any& any)
       out.append(py::str(v));
     }
     return out;
+  }
+  if (any.type() == typeid(BT::PyPose2D))
+  {
+    return pose2d_to_py(any.cast<BT::PyPose2D>());
+  }
+  if (any.type() == typeid(BT::SharedQueue<BT::PyPose2D>))
+  {
+    return pose2d_queue_to_py(any.cast<BT::SharedQueue<BT::PyPose2D>>());
   }
 
   nlohmann::json json;
@@ -673,6 +839,14 @@ BT::Result set_output_from_py(BT::TreeNode& node, const std::string& key,
         fail("got " + py_type_name(value));
       }
       return node.setOutput(key, py::cast<std::string>(value));
+    }
+    if (expected_type == typeid(BT::PyPose2D))
+    {
+      return node.setOutput(key, py_to_pose2d(value));
+    }
+    if (expected_type == typeid(BT::SharedQueue<BT::PyPose2D>))
+    {
+      return node.setOutput(key, py_to_pose2d_queue(value));
     }
 
     if (expected_type == typeid(std::vector<bool>))
@@ -1077,6 +1251,220 @@ void add_python_exception_note(py::error_already_set& err, const BT::TreeNode& n
   }
 }
 
+class LockedPortContent
+{
+public:
+  LockedPortContent(BT::AnyPtrLocked any_ref, std::string key, std::string node_path,
+                    std::string registration_id) :
+    any_ref_(std::move(any_ref)),
+    key_(std::move(key)),
+    node_path_(std::move(node_path)),
+    registration_id_(std::move(registration_id))
+  {}
+
+  [[nodiscard]] bool valid() const
+  {
+    return static_cast<bool>(any_ref_);
+  }
+
+  [[nodiscard]] bool empty() const
+  {
+    ensure_valid("empty");
+    return any_ref_.get()->empty();
+  }
+
+  [[nodiscard]] py::object get() const
+  {
+    ensure_valid("get");
+    return any_to_py(*any_ref_.get());
+  }
+
+  void set(const py::object& value)
+  {
+    ensure_valid("set");
+    BT::Any* any_ptr = any_ref_.operator->();
+    BT::Any& any = *any_ptr;
+    if (any.empty())
+    {
+      // Initialize untyped/empty content from Python value.
+      if (value.is_none())
+      {
+        any_ref_.assign(BT::Any(nlohmann::json(nullptr)));
+        return;
+      }
+      if (py::isinstance<py::bool_>(value))
+      {
+        any_ref_.assign(BT::Any(py::cast<bool>(value)));
+        return;
+      }
+      if (py::isinstance<py::int_>(value) && !py::isinstance<py::bool_>(value))
+      {
+        any_ref_.assign(BT::Any(py_int_to_int64(value)));
+        return;
+      }
+      if (py::isinstance<py::float_>(value))
+      {
+        any_ref_.assign(BT::Any(py::cast<double>(value)));
+        return;
+      }
+      if (py::isinstance<py::str>(value))
+      {
+        any_ref_.assign(BT::Any(py::cast<std::string>(value)));
+        return;
+      }
+      if (py::isinstance<py::list>(value) || py::isinstance<py::tuple>(value))
+      {
+        const py::sequence seq = py::reinterpret_borrow<py::sequence>(value);
+        if (py::len(seq) == 0)
+        {
+          any_ref_.assign(BT::Any(std::vector<int64_t> {}));
+          return;
+        }
+        py::handle first = seq[0];
+        if (py::isinstance<py::int_>(first) && !py::isinstance<py::bool_>(first))
+        {
+          std::vector<int64_t> out;
+          for (py::handle item : seq)
+          {
+            out.push_back(py_int_to_int64(item));
+          }
+          any_ref_.assign(BT::Any(out));
+          return;
+        }
+        if (py::isinstance<py::dict>(first))
+        {
+          any_ref_.assign(BT::Any(py_to_pose2d_queue(value)));
+          return;
+        }
+      }
+      any_ref_.assign(BT::Any(py_to_json_strict(value)));
+      return;
+    }
+
+    if (any.type() == typeid(bool))
+    {
+      any_ref_.assign(BT::Any(py::cast<bool>(value)));
+      return;
+    }
+    if (any.type() == typeid(int64_t))
+    {
+      any_ref_.assign(BT::Any(py_int_to_int64(value)));
+      return;
+    }
+    if (any.type() == typeid(double))
+    {
+      any_ref_.assign(BT::Any(py::cast<double>(value)));
+      return;
+    }
+    if (any.type() == typeid(std::string))
+    {
+      any_ref_.assign(BT::Any(py::cast<std::string>(value)));
+      return;
+    }
+    if (any.type() == typeid(std::vector<int64_t>))
+    {
+      std::vector<int64_t> out;
+      const py::sequence seq = py::reinterpret_borrow<py::sequence>(value);
+      for (py::handle item : seq)
+      {
+        out.push_back(py_int_to_int64(item));
+      }
+      any_ref_.assign(BT::Any(out));
+      return;
+    }
+    if (any.type() == typeid(std::vector<double>))
+    {
+      std::vector<double> out;
+      const py::sequence seq = py::reinterpret_borrow<py::sequence>(value);
+      for (py::handle item : seq)
+      {
+        out.push_back(py::cast<double>(item));
+      }
+      any_ref_.assign(BT::Any(out));
+      return;
+    }
+    if (any.type() == typeid(std::vector<std::string>))
+    {
+      std::vector<std::string> out;
+      const py::sequence seq = py::reinterpret_borrow<py::sequence>(value);
+      for (py::handle item : seq)
+      {
+        out.push_back(py::cast<std::string>(item));
+      }
+      any_ref_.assign(BT::Any(out));
+      return;
+    }
+    if (any.type() == typeid(BT::SharedQueue<BT::PyPose2D>))
+    {
+      any_ref_.assign(BT::Any(py_to_pose2d_queue(value)));
+      return;
+    }
+    if (any.type() == typeid(nlohmann::json))
+    {
+      any_ref_.assign(BT::Any(py_to_json_strict(value)));
+      return;
+    }
+
+    throw std::runtime_error("Locked content set() unsupported for type: " + BT::demangle(any.type()));
+  }
+
+  void append(const py::object& value)
+  {
+    ensure_valid("append");
+    BT::Any* any_ptr = any_ref_.operator->();
+    BT::Any& any = *any_ptr;
+    if (any.empty())
+    {
+      std::vector<int64_t> out;
+      out.push_back(py_int_to_int64(value));
+      any_ref_.assign(BT::Any(out));
+      return;
+    }
+    if (auto* vec_i = any.castPtr<std::vector<int64_t>>())
+    {
+      vec_i->push_back(py_int_to_int64(value));
+      return;
+    }
+    if (auto* vec_d = any.castPtr<std::vector<double>>())
+    {
+      vec_d->push_back(py::cast<double>(value));
+      return;
+    }
+    if (auto* vec_s = any.castPtr<std::vector<std::string>>())
+    {
+      vec_s->push_back(py::cast<std::string>(value));
+      return;
+    }
+    if (auto* queue_pose = any.castPtr<BT::SharedQueue<BT::PyPose2D>>())
+    {
+      if (!*queue_pose)
+      {
+        *queue_pose = std::make_shared<std::deque<BT::PyPose2D>>();
+      }
+      (*queue_pose)->push_back(py_to_pose2d(value));
+      return;
+    }
+    throw std::runtime_error("Locked content append() is supported only for vector/list-like entries");
+  }
+
+private:
+  void ensure_valid(const char* op) const
+  {
+    if (any_ref_)
+    {
+      return;
+    }
+    throw std::runtime_error(std::string("get_locked_port_content('") + key_ + "') returned empty for node '"
+                             + node_path_ + "' (registration_id='" + registration_id_
+                             + "'); operation '" + op + "' is invalid");
+  }
+
+  BT::AnyPtrLocked any_ref_;
+  std::string key_;
+  std::string node_path_;
+  std::string registration_id_;
+};
+
 class NodeHandle
 {
 public:
@@ -1136,6 +1524,24 @@ public:
       if (expected == typeid(std::string))
       {
         auto res = node_->getInput<std::string>(key);
+        if (!res)
+        {
+          throw_input_error(res.error());
+        }
+        return any_to_py(BT::Any(res.value()));
+      }
+      if (expected == typeid(BT::PyPose2D))
+      {
+        auto res = node_->getInput<BT::PyPose2D>(key);
+        if (!res)
+        {
+          throw_input_error(res.error());
+        }
+        return any_to_py(BT::Any(res.value()));
+      }
+      if (expected == typeid(BT::SharedQueue<BT::PyPose2D>))
+      {
+        auto res = node_->getInput<BT::SharedQueue<BT::PyPose2D>>(key);
         if (!res)
         {
           throw_input_error(res.error());
@@ -1207,6 +1613,12 @@ public:
           "set_output('" + key + "') failed for node '" + node_->fullPath()
           + "' (registration_id='" + node_->registrationName() + "'): " + res.error());
     }
+  }
+
+  [[nodiscard]] LockedPortContent get_locked_port_content(const std::string& key) const
+  {
+    return LockedPortContent(
+        node_->getLockedPortContent(key), key, node_->fullPath(), node_->registrationName());
   }
 
   [[nodiscard]] std::string name() const
@@ -2082,9 +2494,20 @@ PYBIND11_MODULE(_core, m)
           },
           "Return child nodes (ControlNode children or DecoratorNode child).");
 
+  py::class_<LockedPortContent>(m, "_LockedPortContent")
+      .def("valid", &LockedPortContent::valid)
+      .def("empty", &LockedPortContent::empty)
+      .def("get", &LockedPortContent::get)
+      .def("set", &LockedPortContent::set, py::arg("value"))
+      .def("append", &LockedPortContent::append, py::arg("value"));
+
   py::class_<NodeHandle>(m, "_NodeHandle")
       .def("get_input", &NodeHandle::get_input, py::arg("key"))
       .def("set_output", &NodeHandle::set_output, py::arg("key"), py::arg("value"))
+      .def("get_locked_port_content",
+           &NodeHandle::get_locked_port_content,
+           py::arg("key"),
+           "Return lock-scoped mutable access to the underlying blackboard port content.")
       .def("tick_child",
            py::overload_cast<>(&NodeHandle::tick_child, py::const_),
            "Tick the child of a DecoratorNode and return its status.")
@@ -2108,6 +2531,17 @@ PYBIND11_MODULE(_core, m)
       .def_property_readonly("name", &NodeHandle::name);
 
   py::class_<BT::Blackboard, BT::Blackboard::Ptr>(m, "Blackboard")
+      .def_static(
+          "create",
+          [](const py::object& parent_obj) {
+            if (parent_obj.is_none())
+            {
+              return BT::Blackboard::create();
+            }
+            return BT::Blackboard::create(parent_obj.cast<BT::Blackboard::Ptr>());
+          },
+          py::arg("parent") = py::none(),
+          "Create a new blackboard instance, optionally with a parent blackboard.")
       .def(
           "keys",
           [](const BT::Blackboard& bb) {
@@ -2304,6 +2738,35 @@ PYBIND11_MODULE(_core, m)
            py::arg("obj"),
            "Import using BT.CPP JsonExporter (requires BT.CPP-supported JSON formats).")
       .def(
+          "backup_blackboards",
+          [](const PyTree& self) {
+            py::list out;
+            for (const auto& bb : BT::BlackboardBackup(self.tree()))
+            {
+              out.append(bb);
+            }
+            return out;
+          },
+          "Create a snapshot of all subtree blackboards.")
+      .def(
+          "restore_blackboards",
+          [](PyTree& self, const py::object& backup_obj) {
+            if (!py::isinstance<py::list>(backup_obj) && !py::isinstance<py::tuple>(backup_obj))
+            {
+              throw py::type_error("backup must be a list[Blackboard]");
+            }
+            std::vector<BT::Blackboard::Ptr> backup;
+            const py::sequence seq = backup_obj.cast<py::sequence>();
+            backup.reserve(seq.size());
+            for (const auto& item : seq)
+            {
+              backup.push_back(py::cast<BT::Blackboard::Ptr>(item));
+            }
+            BT::BlackboardRestore(backup, self.tree());
+          },
+          py::arg("backup"),
+          "Restore a blackboard snapshot created by backup_blackboards().")
+      .def(
           "halt_tree",
           [](PyTree& self) {
             self.enforce_thread_or_throw("halt_tree");
@@ -2465,19 +2928,114 @@ PYBIND11_MODULE(_core, m)
           py::arg("path"),
           "Register nodes from a shared library plugin.")
       .def(
+          "register_loop_node",
+          [](BT::BehaviorTreeFactory& factory, const std::string& registration_id,
+             const std::string& value_type) {
+            if (value_type == "int")
+            {
+              factory.registerNodeType<BT::LoopNode<int>>(registration_id);
+              return;
+            }
+            if (value_type == "double" || value_type == "float")
+            {
+              factory.registerNodeType<BT::LoopNode<double>>(registration_id);
+              return;
+            }
+            if (value_type == "bool")
+            {
+              factory.registerNodeType<BT::LoopNode<bool>>(registration_id);
+              return;
+            }
+            if (value_type == "str" || value_type == "string")
+            {
+              factory.registerNodeType<BT::LoopNode<std::string>>(registration_id);
+              return;
+            }
+            if (value_type == "pose2d")
+            {
+              factory.registerNodeType<BT::LoopNode<BT::PyPose2D>>(registration_id);
+              return;
+            }
+            throw py::value_error(
+                "register_loop_node value_type must be one of: int, double, bool, str, pose2d");
+          },
+          py::arg("registration_id"),
+          py::arg("value_type"),
+          "Register BT.CPP LoopNode<T> under a custom ID.")
+      .def(
+          "register_scripting_enum",
+          [](BT::BehaviorTreeFactory& factory, const std::string& name, int value) {
+            factory.registerScriptingEnum(name, value);
+          },
+          py::arg("name"),
+          py::arg("value"),
+          "Register a named integer constant for Script expressions.")
+      .def(
+          "register_scripting_enums",
+          [](BT::BehaviorTreeFactory& factory, const py::dict& values) {
+            for (const auto& item : values)
+            {
+              if (!py::isinstance<py::str>(item.first))
+              {
+                throw py::type_error("register_scripting_enums keys must be strings");
+              }
+              const std::string name = py::cast<std::string>(item.first);
+              const py::handle value_obj = item.second;
+              if (!py::isinstance<py::int_>(value_obj) || py::isinstance<py::bool_>(value_obj))
+              {
+                throw py::type_error("register_scripting_enums values must be integers");
+              }
+              const int64_t raw = py_int_to_int64(value_obj);
+              if (raw < std::numeric_limits<int>::min() || raw > std::numeric_limits<int>::max())
+              {
+                throw py::value_error("register_scripting_enums value out of int range");
+              }
+              factory.registerScriptingEnum(name, static_cast<int>(raw));
+            }
+          },
+          py::arg("values"),
+          "Register multiple named integer constants for Script expressions.")
+      .def(
           "create_tree_from_text",
-          [](BT::BehaviorTreeFactory& factory, const std::string& text) {
-            return PyTree(factory.createTreeFromText(text));
+          [](BT::BehaviorTreeFactory& factory, const std::string& text,
+             const py::object& blackboard_obj) {
+            if (blackboard_obj.is_none())
+            {
+              return PyTree(factory.createTreeFromText(text));
+            }
+            return PyTree(
+                factory.createTreeFromText(text, blackboard_obj.cast<BT::Blackboard::Ptr>()));
           },
           py::arg("text"),
+          py::arg("blackboard") = py::none(),
           "Create a Tree from an XML string.")
       .def(
           "create_tree_from_file",
-          [](BT::BehaviorTreeFactory& factory, const std::string& path) {
-            return PyTree(factory.createTreeFromFile(path));
+          [](BT::BehaviorTreeFactory& factory, const std::string& path,
+             const py::object& blackboard_obj) {
+            if (blackboard_obj.is_none())
+            {
+              return PyTree(factory.createTreeFromFile(path));
+            }
+            return PyTree(
+                factory.createTreeFromFile(path, blackboard_obj.cast<BT::Blackboard::Ptr>()));
           },
           py::arg("path"),
+          py::arg("blackboard") = py::none(),
           "Create a Tree from an XML file path.")
+      .def(
+          "create_tree",
+          [](BT::BehaviorTreeFactory& factory, const std::string& tree_name,
+             const py::object& blackboard_obj) {
+            if (blackboard_obj.is_none())
+            {
+              return PyTree(factory.createTree(tree_name));
+            }
+            return PyTree(factory.createTree(tree_name, blackboard_obj.cast<BT::Blackboard::Ptr>()));
+          },
+          py::arg("tree_name"),
+          py::arg("blackboard") = py::none(),
+          "Instantiate a previously-registered BehaviorTree by ID.")
       .def(
           "register_behavior_tree_from_file",
           [](BT::BehaviorTreeFactory& factory, const std::string& path) {
@@ -2506,13 +3064,6 @@ PYBIND11_MODULE(_core, m)
       .def("clear_registered_behavior_trees",
            &BT::BehaviorTreeFactory::clearRegisteredBehaviorTrees,
            "Clear previously-registered BehaviorTrees.")
-      .def(
-          "create_tree",
-          [](BT::BehaviorTreeFactory& factory, const std::string& tree_name) {
-            return PyTree(factory.createTree(tree_name));
-          },
-          py::arg("tree_name"),
-          "Instantiate a previously-registered BehaviorTree by ID.")
       .def("clear_substitution_rules",
            &BT::BehaviorTreeFactory::clearSubstitutionRules,
            "Clear any previously-configured substitution rules.")

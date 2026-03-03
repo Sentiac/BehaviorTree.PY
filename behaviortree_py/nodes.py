@@ -20,6 +20,9 @@ class SyncActionNode:
     def set_output(self, key: str, value) -> None:
         self._bt.set_output(key, value)  # set internally by the native wrapper
 
+    def get_locked_port_content(self, key: str):
+        return self._bt.get_locked_port_content(key)  # set internally by the native wrapper
+
 
 class StatefulActionNode:
     def __init__(self, name: str, *args: object, **kwargs: object) -> None:
@@ -44,6 +47,9 @@ class StatefulActionNode:
     def set_output(self, key: str, value) -> None:
         self._bt.set_output(key, value)  # set internally by the native wrapper
 
+    def get_locked_port_content(self, key: str):
+        return self._bt.get_locked_port_content(key)  # set internally by the native wrapper
+
 
 class ConditionNode:
     def __init__(self, name: str, *args: object, **kwargs: object) -> None:
@@ -61,6 +67,9 @@ class ConditionNode:
 
     def set_output(self, key: str, value) -> None:
         self._bt.set_output(key, value)  # set internally by the native wrapper
+
+    def get_locked_port_content(self, key: str):
+        return self._bt.get_locked_port_content(key)  # set internally by the native wrapper
 
 
 class DecoratorNode:
@@ -91,6 +100,9 @@ class DecoratorNode:
 
     def set_output(self, key: str, value) -> None:
         self._bt.set_output(key, value)  # set internally by the native wrapper
+
+    def get_locked_port_content(self, key: str):
+        return self._bt.get_locked_port_content(key)  # set internally by the native wrapper
 
 
 class ControlNode:
@@ -128,3 +140,6 @@ class ControlNode:
 
     def set_output(self, key: str, value) -> None:
         self._bt.set_output(key, value)  # set internally by the native wrapper
+
+    def get_locked_port_content(self, key: str):
+        return self._bt.get_locked_port_content(key)  # set internally by the native wrapper

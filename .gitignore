@@ -1,8 +1,24 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 build/
 dist/
 *.egg-info/
 
+# Virtual environments
+.venv/
+.venv*/
+venv/
+
+# Coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+
+# Tool/log artifacts
+*.btlog
+*.db3
+minitrace.json

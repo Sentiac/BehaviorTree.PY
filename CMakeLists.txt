@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(behaviortree_py VERSION 4.7.1 LANGUAGES CXX)
+project(behaviortree_py VERSION 4.8.3 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 

@@ -39,6 +39,8 @@ def main() -> None:
     ]
 
     for value in samples:
+        bb.unset("in_val")
+        bb.unset("out_val")
         bb.set("in_val", value)
         status = tree.tick_once()
         out = bb.get("out_val")
@@ -53,4 +55,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
