@@ -36,9 +36,21 @@ jobs:
         run: |
           set -euo pipefail
 
+          # ROS setup scripts can reference unset vars; source with nounset disabled.
+          set +u
           source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+          set -u
 
-          BTPY_VER="$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          BTPY_VER="$(python3 - <<'PY'
+          import pathlib
+          try:
+              import tomllib
+          except ModuleNotFoundError:
+              import tomli as tomllib
+          data = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
+          print(data['project']['version'])
+          PY
+          )"
 
           git clone --depth 1 --branch "${BTPY_VER}" https://github.com/BehaviorTree/BehaviorTree.CPP.git btcpp
 
@@ -54,14 +66,16 @@ jobs:
         run: |
           set -euo pipefail
 
+          # ROS setup scripts can reference unset vars; source with nounset disabled.
+          set +u
           source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+          set -u
 
           python3 -m venv .venv
           source .venv/bin/activate
           python -m pip install -U pip
 
-          python -m pip install -U scikit-build-core pybind11 cmake ninja pytest
+          python -m pip install -U scikit-build-core pybind11 cmake ninja pytest tomli
           python -m pip install -v --no-build-isolation .
 
           ./scripts/run_tests.sh
-
