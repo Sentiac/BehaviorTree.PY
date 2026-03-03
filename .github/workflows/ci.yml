@@ -43,12 +43,12 @@ jobs:
 
           BTPY_VER="$(python3 - <<'PY'
           import pathlib
-          try:
-              import tomllib
-          except ModuleNotFoundError:
-              import tomli as tomllib
-          data = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
-          print(data['project']['version'])
+          import re
+          text = pathlib.Path("pyproject.toml").read_text()
+          match = re.search(r'(?ms)^\[project\].*?^version\s*=\s*"([^"]+)"', text)
+          if not match:
+              raise RuntimeError("Could not read [project].version from pyproject.toml")
+          print(match.group(1))
           PY
           )"
 
@@ -58,7 +58,16 @@ jobs:
           cmake --build btcpp/build -- -j2
           cmake --install btcpp/build
 
-          echo "CMAKE_PREFIX_PATH=${PWD}/btcpp/install" >> "$GITHUB_ENV"
+          if [[ -n "${CMAKE_PREFIX_PATH:-}" ]]; then
+            echo "CMAKE_PREFIX_PATH=${PWD}/btcpp/install:${CMAKE_PREFIX_PATH}" >> "$GITHUB_ENV"
+          else
+            echo "CMAKE_PREFIX_PATH=${PWD}/btcpp/install" >> "$GITHUB_ENV"
+          fi
+          if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
+            echo "LD_LIBRARY_PATH=${PWD}/btcpp/install/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          else
+            echo "LD_LIBRARY_PATH=${PWD}/btcpp/install/lib" >> "$GITHUB_ENV"
+          fi
 
       - name: pip install and run tests
         shell: bash
